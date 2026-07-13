@@ -2,6 +2,7 @@
   "name": "color-tool",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.28.2",
   "dependencies": {
     "@primer/octicons-react": "^17.2.0",
     "@primer/react": "^35.2.2",
