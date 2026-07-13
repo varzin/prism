@@ -64,6 +64,12 @@ type MachineEvent =
       scaleId: string
     }
   | {
+      type: 'INSERT_COLOR'
+      paletteId: string
+      scaleId: string
+      index: number
+    }
+  | {
       type: 'POP_COLOR'
       paletteId: string
       scaleId: string
@@ -296,6 +302,85 @@ const machine = Machine<MachineContext, MachineEvent>({
         }
 
         colors.push(newColor)
+      })
+    },
+    INSERT_COLOR: {
+      target: 'debouncing',
+      actions: assign((context, event) => {
+        const palette = context.palettes[event.paletteId]
+        const scale = palette.scales[event.scaleId]
+        const colors = scale.colors
+        const n = colors.length
+
+        if (n === 0) return
+
+        // Where the new value lands in a channel/curve array: the midpoint of
+        // the two neighbours when inserting between swatches, or the trend
+        // extrapolated one step past the edge when inserting at the start/end.
+        // `len` is the color count, not the array length: a linked curve's
+        // `values` may have a stale tail (POP/DELETE_COLOR don't trim curves),
+        // so sampling base and curve against the same `len` keeps them on the
+        // same branch and aligned by index.
+        const sample = (values: number[], at: number, len: number): number => {
+          if (at > 0 && at < len) {
+            return (values[at - 1] + values[at]) / 2
+          }
+          if (at <= 0) {
+            return len >= 2 ? 2 * values[0] - values[1] : values[0]
+          }
+          const last = len - 1
+          return len >= 2 ? 2 * values[last] - values[last - 1] : values[last]
+        }
+
+        const at = clamp(event.index, 0, n)
+        const newColor: Color = {hue: 0, saturation: 0, lightness: 0}
+
+        for (const channel of ['hue', 'saturation', 'lightness'] as const) {
+          const {min, max} = getRange(channel)
+
+          // The base offset follows the ramp of the other base offsets…
+          newColor[channel] = clamp(
+            sample(
+              colors.map(color => color[channel]),
+              at,
+              n
+            ),
+            min,
+            max
+          )
+
+          // …and if a curve drives this channel, splice a matching value into
+          // it at the same index so the curve stays aligned by position. Since
+          // base + curve are combined linearly, sampling each independently
+          // keeps the computed color on the progression.
+          const curveId = scale.curves[channel]
+          const curve = curveId ? palette.curves[curveId] : undefined
+          if (curve && curveId) {
+            const value = clamp(sample(curve.values, at, n), min, max)
+
+            // If the curve is linked to more than one scale, splicing it in
+            // place would shift every other scale's indices and corrupt their
+            // colors. Fork it for this scale instead.
+            const shared = Object.values(palette.scales).filter(other => other.curves[channel] === curveId).length > 1
+
+            if (shared) {
+              const forkedId = uniqueId()
+              const forkedValues = curve.values.slice()
+              forkedValues.splice(at, 0, value)
+              palette.curves[forkedId] = {
+                id: forkedId,
+                name: curve.name,
+                type: curve.type,
+                values: forkedValues
+              }
+              scale.curves[channel] = forkedId
+            } else {
+              curve.values.splice(at, 0, value)
+            }
+          }
+        }
+
+        colors.splice(at, 0, newColor)
       })
     },
     POP_COLOR: {

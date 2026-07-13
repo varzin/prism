@@ -20,6 +20,7 @@ export function Scale() {
   const {paletteId = '', scaleId = ''} = useParams()
   const navigate = useNavigate()
   const [selectedIndex, setIndex] = React.useState('0')
+  const [activeSeam, setActiveSeam] = React.useState<number | null>(null)
   const [state, send] = useGlobalState()
   const palette = state.context.palettes[paletteId]
   const scale = palette.scales[scaleId]
@@ -105,7 +106,23 @@ export function Scale() {
           </ButtonGroup>
         </Box>
         <div style={{height: 8}}></div>
-        <ZStack>
+        <ZStack
+          // Reveal the seam "+" by proximity instead of a permanent pointer-
+          // capturing strip, so clicks on swatches and drags on curve handles
+          // are never swallowed near a boundary. Skip while a mouse button is
+          // held (e.g. dragging a curve) so the affordance doesn't flash.
+          onMouseMove={event => {
+            if (event.buttons !== 0) return
+            const count = scale.colors.length
+            const rect = event.currentTarget.getBoundingClientRect()
+            if (!rect.width || !count) return
+            const x = event.clientX - rect.left
+            const seam = Math.max(0, Math.min(count, Math.round((x / rect.width) * count)))
+            const seamX = (seam / count) * rect.width
+            setActiveSeam(Math.abs(x - seamX) <= 16 ? seam : null)
+          }}
+          onMouseLeave={() => setActiveSeam(null)}
+        >
           <Box
             sx={{
               display: 'flex',
@@ -234,6 +251,115 @@ export function Scale() {
                 />
               )
             })}
+          {/*
+            Seam insert affordances. Rendered last so they paint above the curve
+            editors, yet with no positive z-index a modal's fixed backdrop still
+            covers them. The whole overlay ignores pointer events; only a
+            revealed "+" button (see ZStack onMouseMove) captures clicks, so
+            swatch selection and curve editing are never blocked near a seam.
+          */}
+          <Box
+            sx={{
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none'
+            }}
+          >
+            {Array.from({length: scale.colors.length + 1}).map((_, seamIndex) => {
+              const count = scale.colors.length
+              const isStart = seamIndex === 0
+              const isEnd = seamIndex === count
+              const active = activeSeam === seamIndex
+              const label = isStart
+                ? 'Add color to start of scale'
+                : isEnd
+                ? 'Add color to end of scale'
+                : `Insert color between ${seamIndex - 1} and ${seamIndex}`
+              return (
+                <Box
+                  key={seamIndex}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: `${(seamIndex / count) * 100}%`,
+                    width: 32,
+                    // Center on the seam — including the two edges, so the start
+                    // and end affordances straddle the border and stick out.
+                    transform: 'translateX(-50%)',
+                    pointerEvents: 'none',
+                    display: 'grid',
+                    placeItems: 'center',
+                    // Hairline guide that snaps to the seam, echoing the curve
+                    // editor's visual language.
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      bottom: 0,
+                      left: '50%',
+                      width: '2px',
+                      transform: 'translateX(-50%)',
+                      backgroundColor: 'var(--color-text)',
+                      opacity: active ? 0.25 : 0,
+                      transition: 'opacity 120ms ease',
+                      '@media (prefers-reduced-motion: reduce)': {transition: 'none'}
+                    }
+                  }}
+                >
+                  <Box
+                    as="button"
+                    type="button"
+                    aria-label={label}
+                    onFocus={() => setActiveSeam(seamIndex)}
+                    onBlur={() => setActiveSeam(current => (current === seamIndex ? null : current))}
+                    onClick={event => {
+                      send({type: 'INSERT_COLOR', paletteId, scaleId, index: seamIndex})
+                      setIndex(String(seamIndex))
+                      // Mouse (detail > 0): hide until the pointer nears a seam
+                      // again, and drop focus. Keyboard (detail === 0): keep the
+                      // button focused and visible so focus isn't lost to body.
+                      if (event.detail !== 0) {
+                        setActiveSeam(null)
+                        event.currentTarget.blur()
+                      }
+                    }}
+                    sx={{
+                      all: 'unset',
+                      boxSizing: 'border-box',
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-background, #fff)',
+                      border: '1px solid',
+                      borderColor: active
+                        ? 'var(--color-accent-emphasis, #0969da)'
+                        : 'var(--color-border, rgba(0,0,0,0.2))',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.24)',
+                      color: 'var(--color-text)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      opacity: active ? 1 : 0,
+                      transform: active ? 'scale(1)' : 'scale(0.7)',
+                      // Only interactive once revealed, so a hidden node never
+                      // swallows a click meant for the swatch behind it.
+                      pointerEvents: active ? 'auto' : 'none',
+                      transition: 'opacity 120ms ease, transform 120ms ease',
+                      '@media (prefers-reduced-motion: reduce)': {transition: 'none'},
+                      '&:focus-visible': {
+                        outline: '2px solid var(--color-accent-emphasis, #0969da)',
+                        outlineOffset: '2px'
+                      }
+                    }}
+                  >
+                    <PlusIcon size={14} />
+                  </Box>
+                </Box>
+              )
+            })}
+          </Box>
         </ZStack>
         {index ? (
           <div style={{flexShrink: 0, display: 'flex', height: 48}}>
