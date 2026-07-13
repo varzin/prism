@@ -8,7 +8,7 @@ import {interpret, Interpreter, Machine, TypegenDisabled} from 'xstate'
 import cssColorNames from './css-color-names.json'
 import exampleScales from './example-scales.json'
 import {Color, Curve, Palette, Scale} from './types'
-import {getColor, hexToColor, randomIntegerInRange, lerp} from './utils'
+import {clamp, getColor, getRange, hexToColor, randomIntegerInRange, lerp} from './utils'
 
 const GLOBAL_STATE_KEY = 'global_state'
 
@@ -244,18 +244,58 @@ const machine = Machine<MachineContext, MachineEvent>({
     CREATE_COLOR: {
       target: 'debouncing',
       actions: assign((context, event) => {
-        const colors = context.palettes[event.paletteId].scales[event.scaleId].colors
-        let color = {...colors[colors.length - 1]}
+        const palette = context.palettes[event.paletteId]
+        const scale = palette.scales[event.scaleId]
+        const colors = scale.colors
+        const n = colors.length
 
-        if (!color) {
-          const randomIndex = randomIntegerInRange(0, cssColorNames.length)
-          const name = cssColorNames[randomIndex]
-          color = hexToColor(name)
-        } else {
-          color.lightness = Math.max(0, color.lightness - 10)
+        // Empty scale: seed with a random named color.
+        if (n === 0) {
+          const randomIndex = randomIntegerInRange(0, cssColorNames.length - 1)
+          colors.push(hexToColor(cssColorNames[randomIndex]))
+          return
         }
 
-        context.palettes[event.paletteId].scales[event.scaleId].colors.push(color)
+        const lastColor = colors[n - 1]
+
+        // Only one color so far — no trend to extrapolate yet, so fall back to a
+        // darker step.
+        if (n === 1) {
+          colors.push({...lastColor, lightness: Math.max(0, lastColor.lightness - 10)})
+          return
+        }
+
+        // Continue the existing progression: extrapolate the trend of the last
+        // two *computed* colors (base + curve) for each channel, so hue,
+        // saturation and lightness all keep following their ramp.
+        const prev = getColor(palette.curves, scale, n - 1)
+        const prev2 = getColor(palette.curves, scale, n - 2)
+
+        const newColor = {...lastColor}
+
+        for (const channel of ['hue', 'saturation', 'lightness'] as const) {
+          const {min, max} = getRange(channel)
+          const target = clamp(prev[channel] + (prev[channel] - prev2[channel]), min, max)
+
+          const curveId = scale.curves[channel]
+          const curve = curveId ? palette.curves[curveId] : undefined
+          const curveValue = curve?.values[n]
+
+          if (curve && curveValue === undefined) {
+            // Channel is driven by a curve that doesn't yet cover this index.
+            // Keep the ramp in the curve by extending its tail, and leave the
+            // base offset as-is (typically 0 after CREATE_CURVE_FROM_SCALE).
+            const base = lastColor[channel]
+            curve.values[n] = clamp(target - base, min, max)
+            newColor[channel] = base
+          } else {
+            // No curve, or the curve already covers this index — put the
+            // remainder in the base color.
+            newColor[channel] = clamp(target - (curveValue ?? 0), min, max)
+          }
+        }
+
+        colors.push(newColor)
       })
     },
     POP_COLOR: {
