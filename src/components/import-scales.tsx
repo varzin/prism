@@ -3,18 +3,22 @@ import {Dialog} from '@primer/react/lib-esm/Dialog/Dialog'
 import {isArray, keyBy} from 'lodash-es'
 import React from 'react'
 import {v4 as uniqueId} from 'uuid'
-import {Scale} from '../types'
-import {hexToColor} from '../utils'
+import {Color, Scale} from '../types'
+import {getColorName, hexToColor} from '../utils'
 import {Button} from './button'
 import {HStack, VStack} from './stack'
 
 const PLACEHOLDER = `{
   "gray": [
-    "#eee",
-    "#ddd",
-    "#ccc"
+    { "name": "10", "value": "#eee" },
+    { "name": "20", "value": "#ddd" },
+    { "name": "30", "value": "#ccc" }
   ]
 }`
+
+// A single color in imported JSON: either a bare hex string (legacy) or a
+// {name, value} object.
+type ImportedColor = string | {name?: string | number; value: string}
 
 type ImportScalesProps = {
   onImport: (scales: Record<string, Scale>, replace: boolean) => void
@@ -30,7 +34,7 @@ export function ImportScales({onImport}: ImportScalesProps) {
     event.preventDefault()
 
     try {
-      const parsedCode: Record<string, string | string[]> = JSON.parse(code)
+      const parsedCode: Record<string, ImportedColor | ImportedColor[]> = JSON.parse(code)
 
       const scales: Scale[] = Object.entries(parsedCode).map(([name, scale]) => {
         const id = uniqueId()
@@ -40,7 +44,23 @@ export function ImportScales({onImport}: ImportScalesProps) {
           throw new Error(`Please provide at least one color for ${name} scale`)
         }
 
-        return {id, name, colors: scaleArray.map(hexToColor), curves: {}}
+        const colors: Color[] = scaleArray.map((entry, index) => {
+          // Legacy shape: a bare hex string. Name defaults to the step-of-10 scheme.
+          if (typeof entry === 'string') {
+            return {...hexToColor(entry), name: getColorName([], index)}
+          }
+
+          if (!entry || typeof entry.value !== 'string') {
+            throw new Error(`Each color in ${name} needs a "value" hex string`)
+          }
+
+          return {
+            ...hexToColor(entry.value),
+            name: entry.name != null ? String(entry.name) : getColorName([], index)
+          }
+        })
+
+        return {id, name, colors, curves: {}}
       })
 
       onImport(keyBy(scales, 'id'), replace)

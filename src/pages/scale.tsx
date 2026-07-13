@@ -14,13 +14,16 @@ import {VStack, ZStack} from '../components/stack'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {Curve} from '../types'
-import {colorToHex, getColor, getContrastScore, getRange} from '../utils'
+import {colorToHex, getColor, getColorName, getContrastScore, getRange} from '../utils'
 
 export function Scale() {
   const {paletteId = '', scaleId = ''} = useParams()
   const navigate = useNavigate()
   const [selectedIndex, setIndex] = React.useState('0')
   const [activeSeam, setActiveSeam] = React.useState<number | null>(null)
+  // Which color name is being edited inline (index), plus its draft text.
+  const [editingName, setEditingName] = React.useState<number | null>(null)
+  const [nameDraft, setNameDraft] = React.useState('')
   const [state, send] = useGlobalState()
   const palette = state.context.palettes[paletteId]
   const scale = palette.scales[scaleId]
@@ -30,6 +33,11 @@ export function Scale() {
     saturation: true,
     lightness: true
   })
+
+  // Close any open name editor when navigating between scales.
+  React.useEffect(() => {
+    setEditingName(null)
+  }, [scaleId])
 
   if (!scale) {
     return (
@@ -167,22 +175,91 @@ export function Scale() {
                       right: 0,
                       backgroundColor: 'var(--color-text)',
                       borderRadius: 2
-                    },
-                    '&::after': {
-                      content: `"${i}"`,
-                      position: 'absolute',
-                      display: 'block',
-                      width: '100%',
-                      top: '-26px',
-                      left: 0,
-                      color: 'var(--color-text)',
-                      fontSize: 0,
-                      fontWeight: Number(index) === i ? 'bold' : 'normal',
-                      textAlign: 'center'
                     }
                   }}
                   onClick={() => setIndex(String(i))}
                 >
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: '-26px',
+                      left: 0,
+                      right: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      // Clicking anywhere in the strip except the text just selects
+                      // the color (the click bubbles to the swatch's onClick).
+                      cursor: 'pointer',
+                      // Sit above the curve/seam overlays so the label is clickable.
+                      zIndex: 1
+                    }}
+                  >
+                    {editingName === i ? (
+                      <input
+                        autoFocus
+                        aria-label={`Name for ${scale.name}.${i}`}
+                        value={nameDraft}
+                        onChange={event => setNameDraft(event.target.value)}
+                        onClick={event => event.stopPropagation()}
+                        onBlur={() => {
+                          const trimmed = nameDraft.trim()
+                          if (trimmed) send({type: 'CHANGE_COLOR_NAME', paletteId, scaleId, index: i, name: trimmed})
+                          setEditingName(null)
+                        }}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') {
+                            event.currentTarget.blur()
+                          } else if (event.key === 'Escape') {
+                            setEditingName(null)
+                          }
+                        }}
+                        style={{
+                          width: 48,
+                          textAlign: 'center',
+                          fontSize: 12,
+                          fontFamily: 'inherit',
+                          fontWeight: 'bold',
+                          border: '1px solid var(--color-accent-emphasis, #0969da)',
+                          borderRadius: 6,
+                          padding: '1px 4px',
+                          background: 'var(--color-background, #fff)',
+                          color: 'var(--color-text)',
+                          outline: 'none'
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        as="button"
+                        type="button"
+                        aria-label={`Edit name for ${scale.name}.${i}`}
+                        onClick={event => {
+                          event.stopPropagation()
+                          setIndex(String(i))
+                          setNameDraft(getColorName(scale.colors, i))
+                          setEditingName(i)
+                        }}
+                        sx={{
+                          all: 'unset',
+                          // Only the text itself starts editing; it shows a text
+                          // caret and highlights on hover to signal it's editable.
+                          cursor: 'text',
+                          fontSize: 0,
+                          lineHeight: 1.5,
+                          px: 1,
+                          borderRadius: 2,
+                          color: 'var(--color-text)',
+                          fontWeight: Number(index) === i ? 'bold' : 'normal',
+                          '&:hover': {backgroundColor: 'var(--color-background-secondary)'},
+                          '&:focus-visible': {
+                            outline: '2px solid var(--color-accent-emphasis, #0969da)',
+                            outlineOffset: '1px'
+                          }
+                        }}
+                      >
+                        {getColorName(scale.colors, i)}
+                      </Box>
+                    )}
+                  </Box>
                   <Box display="flex" alignItems="center" flexDirection="column">
                     <span
                       style={{
@@ -597,7 +674,7 @@ export function Scale() {
             <Color paletteId={paletteId} scaleId={scaleId} index={index} />
             <Separator />
             {/* TODO: Pull this into a separate component */}
-            <SidebarPanel title={`Contrast of ${scale.name}.${index}`}>
+            <SidebarPanel title={`Contrast of ${scale.name}.${getColorName(scale.colors, Number(index))}`}>
               <Box
                 as="ul"
                 sx={{
@@ -620,7 +697,7 @@ export function Scale() {
                       const hex = colorToHex(getColor(palette.curves, scale, i))
                       const contrast = getContrast(hex, focusedHex || '')
                       return {
-                        name: `${scale.name}.${i}`,
+                        name: `${scale.name}.${getColorName(scale.colors, i)}`,
                         hex,
                         contrast
                       }

@@ -2,7 +2,7 @@ import {Box} from '@primer/react'
 import {toHsla, toRgba} from 'color2k'
 import React from 'react'
 import {useGlobalState} from '../global-state'
-import {colorToHex, getColor} from '../utils'
+import {colorToHex, getColor, getColorName} from '../utils'
 import {Button} from './button'
 import {Input} from './input'
 import {SidebarPanel} from './sidebar-panel'
@@ -23,7 +23,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
   const hex = colorToHex(computedColor)
 
   return (
-    <SidebarPanel title={`${scale.name}.${index}`}>
+    <SidebarPanel title={`${scale.name}.${getColorName(scale.colors, indexAsNumber)}`}>
       <VStack spacing={16}>
         <Box sx={{width: '100%', height: 48, background: hex, borderRadius: 1}} />
         <div

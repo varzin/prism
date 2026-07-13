@@ -8,7 +8,16 @@ import {interpret, Interpreter, Machine, TypegenDisabled} from 'xstate'
 import cssColorNames from './css-color-names.json'
 import exampleScales from './example-scales.json'
 import {Color, Curve, Palette, Scale} from './types'
-import {clamp, getColor, getRange, hexToColor, randomIntegerInRange, lerp} from './utils'
+import {
+  clamp,
+  getColor,
+  getColorName,
+  getRange,
+  hexToColor,
+  predictColorName,
+  randomIntegerInRange,
+  lerp
+} from './utils'
 
 const GLOBAL_STATE_KEY = 'global_state'
 
@@ -86,6 +95,13 @@ type MachineEvent =
       scaleId: string
       index: number
       value: Partial<Color>
+    }
+  | {
+      type: 'CHANGE_COLOR_NAME'
+      paletteId: string
+      scaleId: string
+      index: number
+      name: string
     }
   | {
       type: 'CREATE_CURVE_FROM_SCALE'
@@ -180,7 +196,12 @@ const machine = Machine<MachineContext, MachineEvent>({
         const scales: Scale[] = Object.entries(exampleScales).map(([name, scale]) => {
           const id = uniqueId()
           const scaleArray = isArray(scale) ? scale : [scale]
-          return {id, name, colors: scaleArray.map(hexToColor), curves: {}}
+          return {
+            id,
+            name,
+            colors: scaleArray.map((hex, index) => ({...hexToColor(hex), name: getColorName([], index)})),
+            curves: {}
+          }
         })
         context.palettes[paletteId] = {
           id: paletteId,
@@ -225,7 +246,7 @@ const machine = Machine<MachineContext, MachineEvent>({
         const scaleId = uniqueId()
         const randomIndex = randomIntegerInRange(0, cssColorNames.length)
         const name = cssColorNames[randomIndex]
-        const color = hexToColor(name)
+        const color = {...hexToColor(name), name: getColorName([], 0)}
 
         context.palettes[event.paletteId].scales[scaleId] = {
           id: scaleId,
@@ -255,10 +276,16 @@ const machine = Machine<MachineContext, MachineEvent>({
         const colors = scale.colors
         const n = colors.length
 
+        // Name for the color appended at the end, predicted from the current names.
+        const predictedName = predictColorName(
+          colors.map((_, index) => getColorName(colors, index)),
+          n
+        )
+
         // Empty scale: seed with a random named color.
         if (n === 0) {
           const randomIndex = randomIntegerInRange(0, cssColorNames.length - 1)
-          colors.push(hexToColor(cssColorNames[randomIndex]))
+          colors.push({...hexToColor(cssColorNames[randomIndex]), name: predictedName})
           return
         }
 
@@ -267,7 +294,7 @@ const machine = Machine<MachineContext, MachineEvent>({
         // Only one color so far — no trend to extrapolate yet, so fall back to a
         // darker step.
         if (n === 1) {
-          colors.push({...lastColor, lightness: Math.max(0, lastColor.lightness - 10)})
+          colors.push({...lastColor, lightness: Math.max(0, lastColor.lightness - 10), name: predictedName})
           return
         }
 
@@ -277,7 +304,7 @@ const machine = Machine<MachineContext, MachineEvent>({
         const prev = getColor(palette.curves, scale, n - 1)
         const prev2 = getColor(palette.curves, scale, n - 2)
 
-        const newColor = {...lastColor}
+        const newColor = {...lastColor, name: predictedName}
 
         for (const channel of ['hue', 'saturation', 'lightness'] as const) {
           const {min, max} = getRange(channel)
@@ -333,7 +360,12 @@ const machine = Machine<MachineContext, MachineEvent>({
         }
 
         const at = clamp(event.index, 0, n)
-        const newColor: Color = {hue: 0, saturation: 0, lightness: 0}
+        // Predict the inserted color's name from the current names before splicing.
+        const predictedName = predictColorName(
+          colors.map((_, index) => getColorName(colors, index)),
+          at
+        )
+        const newColor: Color = {hue: 0, saturation: 0, lightness: 0, name: predictedName}
 
         for (const channel of ['hue', 'saturation', 'lightness'] as const) {
           const {min, max} = getRange(channel)
@@ -407,6 +439,13 @@ const machine = Machine<MachineContext, MachineEvent>({
       target: 'debouncing',
       actions: assign((context, event) => {
         Object.assign(context.palettes[event.paletteId].scales[event.scaleId].colors[event.index], event.value)
+      })
+    },
+    CHANGE_COLOR_NAME: {
+      target: 'debouncing',
+      actions: assign((context, event) => {
+        const color = context.palettes[event.paletteId].scales[event.scaleId].colors[event.index]
+        if (color) color.name = event.name
       })
     },
     CREATE_CURVE_FROM_SCALE: {
