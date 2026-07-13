@@ -1,0 +1,68 @@
+{
+  "name": "color-tool",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@primer/octicons-react": "^17.2.0",
+    "@primer/react": "^35.2.2",
+    "@radix-ui/react-separator": "^1.0.3",
+    "@testing-library/react": "^11.1.0",
+    "@types/d3-scale": "^3.2.2",
+    "@types/lodash-es": "^4.17.4",
+    "@types/react": "^17.0.0",
+    "@types/react-dom": "^17.0.0",
+    "@types/styled-components": "^5.1.9",
+    "@types/uuid": "^8.3.0",
+    "@xstate/immer": "^0.2.0",
+    "@xstate/react": "^1.3.2",
+    "bezier-easing": "^2.1.0",
+    "color2k": "^1.2.4",
+    "copy-to-clipboard": "^3.3.1",
+    "d3-scale": "^3.3.0",
+    "hsluv": "^0.1.0",
+    "immer": "^9.0.21",
+    "lodash-es": "^4.17.21",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-draggable": "~4.4.6",
+    "react-hotkeys-hook": "^3.3.1",
+    "react-router-dom": "^6.30.4",
+    "react-use-measure": "^2.0.4",
+    "styled-components": "^5.2.3",
+    "uuid": "^8.3.2",
+    "xstate": "^4.18.0"
+  },
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build:preview": "vite build --base=/",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "prepare": "husky install"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "prettier": "@github/prettier-config",
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": "npm run lint"
+  },
+  "devDependencies": {
+    "@github/prettier-config": "0.0.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@types/node": "^20.19.43",
+    "@vitejs/plugin-react": "^4.3.4",
+    "husky": "^8.0.0",
+    "jsdom": "^25.0.1",
+    "lint-staged": "13.0.2",
+    "prettier": "2.7.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7",
+    "vitest": "^3.2.7"
+  }
+}
