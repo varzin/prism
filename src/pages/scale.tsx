@@ -73,7 +73,9 @@ export function Scale() {
           display: 'grid',
           gridTemplateRows: 'auto auto 1fr',
           gap: 16,
-          padding: 16,
+          // Extra left padding reserves a gutter for the H/S/L curve labels,
+          // which overflow to the left of the swatches (see curve-editor.tsx).
+          padding: '16px 16px 16px 28px',
           height: '100%'
         }}
       >

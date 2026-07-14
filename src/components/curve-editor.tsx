@@ -74,7 +74,10 @@ export function CurveEditor({
       fill="none"
       pointerEvents="none"
       opacity={disabled ? 0.5 : 1}
-      style={{position: 'relative'}}
+      // Allow the H/S/L label to render in the left gutter (negative x) instead
+      // of being clipped by the svg viewport when columns get narrow. The graph
+      // column reserves matching left padding in scale.tsx.
+      style={{position: 'relative', overflow: 'visible'}}
       onKeyDown={event => {
         let delta: number | undefined
         switch (event.key) {
@@ -291,10 +294,13 @@ export function CurveEditor({
             )}
 
             {index === 0 ? (
+              // Pinned to the left gutter (x < 0, rendered via the svg's
+              // overflow: visible) so it stays put and readable regardless of
+              // column width. y still tracks this curve's first point.
               <text
-                x={x - nodeRadius - 4}
+                x={-8}
                 y={y}
-                fill="black"
+                fill="currentColor"
                 style={{
                   textTransform: 'uppercase',
                   fontFamily: 'system-ui, sans-serif',
