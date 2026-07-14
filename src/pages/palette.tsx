@@ -16,7 +16,7 @@ import {useGlobalState} from '../global-state'
 import {Color} from '../types'
 import {colorToHex, getColor} from '../utils'
 
-const Wrapper = styled.div<{backgroundColor: string}>`
+const Wrapper = styled.div<{backgroundColor: string; $sidebarOpen: boolean}>`
   --color-text: ${props => readableColor(props.backgroundColor)};
   --color-background: ${props => props.backgroundColor};
   --color-background-secondary: ${props => mix(readableColor(props.backgroundColor), props.backgroundColor, 0.9)};
@@ -25,9 +25,9 @@ const Wrapper = styled.div<{backgroundColor: string}>`
   --color-border: ${props => mix(readableColor(props.backgroundColor), props.backgroundColor, 0.75)};
 
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: ${props => (props.$sidebarOpen ? '300px 1fr' : '1fr')};
   grid-template-rows: auto 1fr;
-  grid-template-areas: 'header header' 'sidebar main';
+  grid-template-areas: ${props => (props.$sidebarOpen ? "'header header' 'sidebar main'" : "'header' 'main'")};
   color: var(--color-text);
   background-color: var(--color-background);
   height: 100vh;
@@ -43,10 +43,16 @@ const Main = styled.main`
   }
 `
 
+export type PaletteOutletContext = {
+  leftSidebarOpen: boolean
+  setLeftSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>
+}
+
 export function Palette() {
   const {paletteId = ''} = useParams()
   const navigate = useNavigate()
   const [state, send] = useGlobalState()
+  const [leftSidebarOpen, setLeftSidebarOpen] = React.useState(true)
   const palette = state.context.palettes[paletteId]
 
   if (!palette) {
@@ -59,7 +65,7 @@ export function Palette() {
   }
 
   return (
-    <Wrapper backgroundColor={palette.backgroundColor}>
+    <Wrapper backgroundColor={palette.backgroundColor} $sidebarOpen={leftSidebarOpen}>
       <header
         style={{
           gridArea: 'header',
@@ -136,6 +142,7 @@ export function Palette() {
       <div
         style={{
           gridArea: 'sidebar',
+          display: leftSidebarOpen ? 'block' : 'none',
           overflow: 'auto',
           borderRight: '1px solid var(--color-border, gainsboro)',
           paddingBottom: 16
@@ -313,7 +320,7 @@ export function Palette() {
         </SidebarPanel>
       </div>
       <Main>
-        <Outlet />
+        <Outlet context={{leftSidebarOpen, setLeftSidebarOpen}} />
       </Main>
     </Wrapper>
   )

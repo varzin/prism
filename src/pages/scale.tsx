@@ -1,8 +1,8 @@
-import {CheckCircle, Minus, Plus, XCircle} from 'lucide-react'
+import {CheckCircle, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, XCircle} from 'lucide-react'
 import {Box, ButtonGroup, Text} from '@primer/react'
 import {getContrast} from 'color2k'
 import React from 'react'
-import {Link, useNavigate, useParams} from 'react-router-dom'
+import {Link, useNavigate, useOutletContext, useParams} from 'react-router-dom'
 import {Button, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {CurveEditor} from '../components/curve-editor'
@@ -13,6 +13,7 @@ import {SidebarPanel} from '../components/sidebar-panel'
 import {VStack, ZStack} from '../components/stack'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
+import {PaletteOutletContext} from './palette'
 import {Curve} from '../types'
 import {colorToHex, getColor, getColorName, getContrastScore, getRange} from '../utils'
 
@@ -24,6 +25,10 @@ export function Scale() {
   // Which color name is being edited inline (index), plus its draft text.
   const [editingName, setEditingName] = React.useState<number | null>(null)
   const [nameDraft, setNameDraft] = React.useState('')
+  // Left panel lives in the parent <Palette>; its toggle is shared via Outlet
+  // context. The right panel is local to this view.
+  const {leftSidebarOpen, setLeftSidebarOpen} = useOutletContext<PaletteOutletContext>()
+  const [rightSidebarOpen, setRightSidebarOpen] = React.useState(true)
   const [state, send] = useGlobalState()
   const palette = state.context.palettes[paletteId]
   const scale = palette.scales[scaleId]
@@ -72,46 +77,38 @@ export function Scale() {
           height: '100%'
         }}
       >
-        <Box
-          sx={{
-            flexShrink: 0,
-            display: 'flex',
-            justifyContent: 'space-between'
-          }}
-        >
-          <ButtonGroup>
-            {Object.entries(visibleCurves).map(([type, isVisible]) => {
-              return (
-                <Button
-                  key={type}
-                  aria-label={`Toggle ${type} curve visibility`}
-                  aria-pressed={isVisible}
-                  onClick={() => setVisibleCurves({...visibleCurves, [type]: !isVisible})}
-                  style={{
-                    background: isVisible ? 'var(--color-background-secondary)' : 'var(--color-background)'
-                  }}
-                >
-                  {type[0].toUpperCase()}
-                </Button>
-              )
-            })}
-          </ButtonGroup>
-          <ButtonGroup>
+        <Box sx={{flexShrink: 0, display: 'flex', justifyContent: 'space-between'}}>
+          <Box sx={{display: 'flex', gap: 2}}>
             <IconButton
-              icon={() => <Minus size={16} />}
-              aria-label="Remove color from end of scale"
-              onClick={() => send({type: 'POP_COLOR', paletteId, scaleId})}
-              disabled={scale.colors.length === 1}
+              aria-label={leftSidebarOpen ? 'Hide left panel' : 'Show left panel'}
+              aria-pressed={leftSidebarOpen}
+              icon={() => (leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />)}
+              onClick={() => setLeftSidebarOpen(open => !open)}
             />
-            <IconButton
-              icon={() => <Plus size={16} />}
-              aria-label="Add color to end of scale"
-              onClick={() => {
-                send({type: 'CREATE_COLOR', paletteId, scaleId})
-                setIndex(scale.colors.length.toString())
-              }}
-            />
-          </ButtonGroup>
+            <ButtonGroup>
+              {Object.entries(visibleCurves).map(([type, isVisible]) => {
+                return (
+                  <Button
+                    key={type}
+                    aria-label={`Toggle ${type} curve visibility`}
+                    aria-pressed={isVisible}
+                    onClick={() => setVisibleCurves({...visibleCurves, [type]: !isVisible})}
+                    style={{
+                      background: isVisible ? 'var(--color-background-secondary)' : 'var(--color-background)'
+                    }}
+                  >
+                    {type[0].toUpperCase()}
+                  </Button>
+                )
+              })}
+            </ButtonGroup>
+          </Box>
+          <IconButton
+            aria-label={rightSidebarOpen ? 'Hide right panel' : 'Show right panel'}
+            aria-pressed={rightSidebarOpen}
+            icon={() => (rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />)}
+            onClick={() => setRightSidebarOpen(open => !open)}
+          />
         </Box>
         <div style={{height: 8}}></div>
         <ZStack
@@ -482,6 +479,7 @@ export function Scale() {
       </div>
       <VStack
         style={{
+          display: rightSidebarOpen ? 'grid' : 'none',
           borderLeft: '1px solid var(--color-border, gainsboro)',
           width: 300,
           flexShrink: 0,

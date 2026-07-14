@@ -68,20 +68,10 @@ type MachineEvent =
       name: string
     }
   | {
-      type: 'CREATE_COLOR'
-      paletteId: string
-      scaleId: string
-    }
-  | {
       type: 'INSERT_COLOR'
       paletteId: string
       scaleId: string
       index: number
-    }
-  | {
-      type: 'POP_COLOR'
-      paletteId: string
-      scaleId: string
     }
   | {
       type: 'DELETE_COLOR'
@@ -268,69 +258,6 @@ const machine = Machine<MachineContext, MachineEvent>({
         context.palettes[event.paletteId].scales[event.scaleId].name = event.name
       })
     },
-    CREATE_COLOR: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        const palette = context.palettes[event.paletteId]
-        const scale = palette.scales[event.scaleId]
-        const colors = scale.colors
-        const n = colors.length
-
-        // Name for the color appended at the end, predicted from the current names.
-        const predictedName = predictColorName(
-          colors.map((_, index) => getColorName(colors, index)),
-          n
-        )
-
-        // Empty scale: seed with a random named color.
-        if (n === 0) {
-          const randomIndex = randomIntegerInRange(0, cssColorNames.length - 1)
-          colors.push({...hexToColor(cssColorNames[randomIndex]), name: predictedName})
-          return
-        }
-
-        const lastColor = colors[n - 1]
-
-        // Only one color so far — no trend to extrapolate yet, so fall back to a
-        // darker step.
-        if (n === 1) {
-          colors.push({...lastColor, lightness: Math.max(0, lastColor.lightness - 10), name: predictedName})
-          return
-        }
-
-        // Continue the existing progression: extrapolate the trend of the last
-        // two *computed* colors (base + curve) for each channel, so hue,
-        // saturation and lightness all keep following their ramp.
-        const prev = getColor(palette.curves, scale, n - 1)
-        const prev2 = getColor(palette.curves, scale, n - 2)
-
-        const newColor = {...lastColor, name: predictedName}
-
-        for (const channel of ['hue', 'saturation', 'lightness'] as const) {
-          const {min, max} = getRange(channel)
-          const target = clamp(prev[channel] + (prev[channel] - prev2[channel]), min, max)
-
-          const curveId = scale.curves[channel]
-          const curve = curveId ? palette.curves[curveId] : undefined
-          const curveValue = curve?.values[n]
-
-          if (curve && curveValue === undefined) {
-            // Channel is driven by a curve that doesn't yet cover this index.
-            // Keep the ramp in the curve by extending its tail, and leave the
-            // base offset as-is (typically 0 after CREATE_CURVE_FROM_SCALE).
-            const base = lastColor[channel]
-            curve.values[n] = clamp(target - base, min, max)
-            newColor[channel] = base
-          } else {
-            // No curve, or the curve already covers this index — put the
-            // remainder in the base color.
-            newColor[channel] = clamp(target - (curveValue ?? 0), min, max)
-          }
-        }
-
-        colors.push(newColor)
-      })
-    },
     INSERT_COLOR: {
       target: 'debouncing',
       actions: assign((context, event) => {
@@ -413,16 +340,6 @@ const machine = Machine<MachineContext, MachineEvent>({
         }
 
         colors.splice(at, 0, newColor)
-      })
-    },
-    POP_COLOR: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        const colors = context.palettes[event.paletteId].scales[event.scaleId].colors
-
-        if (colors.length > 1) {
-          colors.pop()
-        }
       })
     },
     DELETE_COLOR: {
