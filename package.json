@@ -23,6 +23,7 @@
     "hsluv": "^0.1.0",
     "immer": "^9.0.21",
     "lodash-es": "^4.17.21",
+    "lucide-react": "^1.24.0",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-draggable": "~4.4.6",

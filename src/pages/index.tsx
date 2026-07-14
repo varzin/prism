@@ -1,14 +1,5 @@
-import {LinkExternalIcon, MarkGithubIcon, PlusIcon, TrashIcon} from '@primer/octicons-react'
-import {
-  Box,
-  Button,
-  Heading,
-  IconButton as PrimerIconButton,
-  Label,
-  Link as PrimerLink,
-  StyledOcticon,
-  Text
-} from '@primer/react'
+import {ExternalLink, Palette as PaletteIcon, Plus, Trash2} from 'lucide-react'
+import {Box, Button, Heading, IconButton as PrimerIconButton, Label, Link as PrimerLink, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import {Link, useNavigate} from 'react-router-dom'
 import {v4 as uniqueId} from 'uuid'
@@ -38,7 +29,7 @@ export function Index() {
         }}
       >
         <Box sx={{display: 'flex', alignItems: 'center'}}>
-          <MarkGithubIcon size={32} />
+          <PaletteIcon size={32} />
           <Box as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
             Primer Prism
           </Box>
@@ -53,9 +44,14 @@ export function Index() {
             sx={{mr: 4, '&:hover': {textDecoration: 'underline'}}}
           >
             GitHub
-            <StyledOcticon icon={LinkExternalIcon} sx={{marginLeft: 1}} />
+            <ExternalLink size={16} style={{marginLeft: 4, verticalAlign: 'text-bottom'}} />
           </PrimerLink>
-          <PrimerIconButton aria-label="Create new palette" icon={PlusIcon} onClick={createPalette} sx={{margin: 0}} />
+          <PrimerIconButton
+            aria-label="Create new palette"
+            icon={() => <Plus size={16} />}
+            onClick={createPalette}
+            sx={{margin: 0}}
+          />
         </Box>
       </Box>
       <Box sx={{p: 3}}>
@@ -145,7 +141,7 @@ export function Index() {
               </Box>
               <IconButton
                 aria-label="Delete palette"
-                icon={TrashIcon}
+                icon={() => <Trash2 size={16} />}
                 onClick={() => {
                   send({type: 'DELETE_PALETTE', paletteId: palette.id})
                 }}

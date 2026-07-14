@@ -1,4 +1,4 @@
-import {CheckCircleFillIcon, DashIcon, PlusIcon, XCircleIcon} from '@primer/octicons-react'
+import {CheckCircle, Minus, Plus, XCircle} from 'lucide-react'
 import {Box, ButtonGroup, Text} from '@primer/react'
 import {getContrast} from 'color2k'
 import React from 'react'
@@ -98,13 +98,13 @@ export function Scale() {
           </ButtonGroup>
           <ButtonGroup>
             <IconButton
-              icon={DashIcon}
+              icon={() => <Minus size={16} />}
               aria-label="Remove color from end of scale"
               onClick={() => send({type: 'POP_COLOR', paletteId, scaleId})}
               disabled={scale.colors.length === 1}
             />
             <IconButton
-              icon={PlusIcon}
+              icon={() => <Plus size={16} />}
               aria-label="Add color to end of scale"
               onClick={() => {
                 send({type: 'CREATE_COLOR', paletteId, scaleId})
@@ -274,7 +274,7 @@ export function Scale() {
                     >
                       {contrastScore}{' '}
                     </span>
-                    {contrastScore === 'Fail' ? <XCircleIcon /> : <CheckCircleFillIcon />}
+                    {contrastScore === 'Fail' ? <XCircle size={16} /> : <CheckCircle size={16} />}
                   </Box>
                 </Box>
               )
@@ -431,7 +431,7 @@ export function Scale() {
                       }
                     }}
                   >
-                    <PlusIcon size={14} />
+                    <Plus size={14} />
                   </Box>
                 </Box>
               )
@@ -558,7 +558,7 @@ export function Scale() {
                 </Select>
                 <IconButton
                   aria-label="Create hue curve"
-                  icon={PlusIcon}
+                  icon={() => <Plus size={16} />}
                   onClick={() =>
                     send({
                       type: 'CREATE_CURVE_FROM_SCALE',
@@ -605,7 +605,7 @@ export function Scale() {
                     ))}
                 </Select>
                 <IconButton
-                  icon={PlusIcon}
+                  icon={() => <Plus size={16} />}
                   aria-label="Create saturation curve"
                   onClick={() =>
                     send({
@@ -654,7 +654,7 @@ export function Scale() {
                 </Select>
                 <IconButton
                   aria-label="Create lightness curve"
-                  icon={PlusIcon}
+                  icon={() => <Plus size={16} />}
                   onClick={() =>
                     send({
                       type: 'CREATE_CURVE_FROM_SCALE',
@@ -738,9 +738,9 @@ export function Scale() {
                       <Text sx={{fontWeight: 'bold'}}>
                         {getContrastScore(getContrast(hex, focusedHex || ''))}{' '}
                         {getContrastScore(getContrast(hex, focusedHex || '')) === 'Fail' ? (
-                          <XCircleIcon />
+                          <XCircle size={16} />
                         ) : (
-                          <CheckCircleFillIcon />
+                          <CheckCircle size={16} />
                         )}
                       </Text>
                     </span>
