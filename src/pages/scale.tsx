@@ -1,15 +1,4 @@
-import {
-  Check,
-  CheckCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-  Plus,
-  Trash2,
-  X,
-  XCircle
-} from 'lucide-react'
+import {Check, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Trash2, X} from 'lucide-react'
 import {Box, ButtonGroup, Text} from '@primer/react'
 import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
@@ -687,82 +676,6 @@ export function Scale() {
           <>
             <Separator />
             <Color paletteId={paletteId} scaleId={scaleId} index={index} />
-            <Separator />
-            {/* TODO: Pull this into a separate component */}
-            <SidebarPanel title={`Contrast of ${scale.name}.${getColorName(scale.colors, Number(index))}`}>
-              <Box
-                as="ul"
-                sx={{
-                  m: 0,
-                  p: 0,
-                  listStyle: 'none',
-                  display: 'grid',
-                  gap: 2,
-                  fontSize: 1
-                }}
-              >
-                {[
-                  {
-                    name: 'bg',
-                    hex: palette.backgroundColor,
-                    contrast: getContrast(palette.backgroundColor, focusedHex || '')
-                  },
-                  ...scale.colors
-                    .map((_, i) => {
-                      const hex = colorToHex(getColor(palette.curves, scale, i))
-                      const contrast = getContrast(hex, focusedHex || '')
-                      return {
-                        name: `${scale.name}.${getColorName(scale.colors, i)}`,
-                        hex,
-                        contrast
-                      }
-                    })
-                    .filter((_, i) => i !== Number(index))
-                ].map(({name, hex, contrast}) => (
-                  <Box
-                    key={name}
-                    as="li"
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-                      <Box
-                        aria-hidden
-                        sx={{
-                          color: focusedHex,
-                          bg: hex,
-                          border: '1px solid',
-                          borderColor: 'var(--color-border)',
-                          width: 32,
-                          height: 32,
-                          display: 'grid',
-                          placeItems: 'center',
-                          borderRadius: 2
-                        }}
-                      >
-                        Aa
-                      </Box>
-                      <span>on {name}</span>
-                    </Box>
-                    <span>
-                      <Text sx={{mr: 2}}>{contrast.toFixed(2)}</Text>
-                      <Text sx={{fontWeight: 'bold'}}>
-                        {getContrastScore(getContrast(hex, focusedHex || ''))}{' '}
-                        {getContrastScore(getContrast(hex, focusedHex || '')) === 'Fail' ? (
-                          <XCircle size={16} />
-                        ) : (
-                          <CheckCircle size={16} />
-                        )}
-                      </Text>
-                    </span>
-                  </Box>
-                ))}
-              </Box>
-            </SidebarPanel>
           </>
         ) : null}
       </VStack>
