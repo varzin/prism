@@ -7,6 +7,7 @@ import styled from 'styled-components'
 import {Button, IconButton} from '../components/button'
 import {ContrastMode} from '../components/contrast-toggle'
 import {ExportScales} from '../components/export-scales'
+import {FormatSettings} from '../components/format-settings'
 import {ImportScales} from '../components/import-scales'
 import {Input} from '../components/input'
 import {Separator} from '../components/separator'
@@ -189,6 +190,7 @@ export function Palette() {
               })
             }
           /> */}
+          <FormatSettings />
           <ImportScales onImport={(scales, replace) => send({type: 'IMPORT_SCALES', paletteId, scales, replace})} />
           <ExportScales palette={palette} />
         </HStack>

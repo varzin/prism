@@ -3,7 +3,10 @@ import {Dialog} from '@primer/react/lib-esm/Dialog/Dialog'
 import {readableColor} from 'color2k'
 import copy from 'copy-to-clipboard'
 import {camelCase} from 'lodash-es'
+import {Download} from 'lucide-react'
 import React from 'react'
+import {useFormatTemplate} from '../format-context'
+import {serialize, slugifyFilename} from '../format'
 import {Palette} from '../types'
 import {colorToHex, getColor, getColorName} from '../utils'
 import {Button} from './button'
@@ -13,12 +16,23 @@ type ExportScalesProps = {
   palette: Palette
 }
 
-// Each color carries its display name, so the exported JSON round-trips through
-// import and the SVG thumbnail can label every swatch.
+// Each color carries its display name, so the SVG thumbnail can label every swatch.
 type NamedColor = {name: string; value: string}
 
 export function ExportScales({palette}: ExportScalesProps) {
+  const [template] = useFormatTemplate()
   const [isOpen, setIsOpen] = React.useState(false)
+
+  // JSON export follows the user's custom format template.
+  const code = React.useMemo(() => {
+    try {
+      return serialize(palette, template)
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }, [palette, template])
+
+  // The SVG swatch sheet is independent of the JSON format template.
   const namedScales = React.useMemo(
     () =>
       Object.values(palette.scales).reduce<Record<string, NamedColor[]>>((acc, scale) => {
@@ -39,9 +53,19 @@ export function ExportScales({palette}: ExportScalesProps) {
     [palette.curves, palette.scales]
   )
 
-  const code = React.useMemo(() => JSON.stringify(namedScales, null, 2), [namedScales])
-
   const svg = React.useMemo(() => generateSvg(namedScales), [namedScales])
+
+  function downloadJson() {
+    const blob = new Blob([code], {type: 'application/json'})
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = slugifyFilename(palette.name)
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <>
@@ -60,12 +84,15 @@ export function ExportScales({palette}: ExportScalesProps) {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+                gridTemplateColumns: '1fr 1fr 1fr',
                 gap: 16
               }}
             >
               <PrimerButton onClick={() => copy(code)}>Copy JSON</PrimerButton>
               <PrimerButton onClick={() => copy(svg)}>Copy SVG</PrimerButton>
+              <PrimerButton leadingVisual={Download} onClick={downloadJson}>
+                Download .json
+              </PrimerButton>
             </div>
           </VStack>
         </Dialog>
