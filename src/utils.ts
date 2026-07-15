@@ -1,6 +1,6 @@
 import {Color, Curve, Scale} from './types'
 import hsluv from 'hsluv'
-import {toHex} from 'color2k'
+import {getContrast, toHex} from 'color2k'
 
 export function hexToColor(hex: string): Color {
   const [hue, saturation, lightness] = hsluv.hexToHsluv(toHex(hex)).map(value => Math.round(value * 100) / 100)
@@ -40,6 +40,28 @@ export function getRange(type: Curve['type']) {
 
 export function getContrastScore(contrast: number) {
   return contrast < 3 ? 'Fail' : contrast < 4.5 ? 'AA+' : contrast < 7 ? 'AA' : 'AAA'
+}
+
+// The color in `scaleHexes` nearest (by position) to `index` that clears AA
+// contrast against `against` — searching outward from `index` and returning the
+// first side to pass. Falls back to the highest-contrast color when none does.
+export function getNearestContrasting(scaleHexes: string[], index: number, against: string) {
+  let fallback = scaleHexes[index]
+  let fallbackContrast = 0
+
+  for (let distance = 0; distance < scaleHexes.length; distance++) {
+    for (const i of distance === 0 ? [index] : [index - distance, index + distance]) {
+      if (i < 0 || i >= scaleHexes.length) continue
+      const contrast = getContrast(against, scaleHexes[i])
+      if (contrast >= 4.5) return scaleHexes[i]
+      if (contrast > fallbackContrast) {
+        fallback = scaleHexes[i]
+        fallbackContrast = contrast
+      }
+    }
+  }
+
+  return fallback
 }
 
 // Default step between color names when none is stored: 10, 20, 30, …

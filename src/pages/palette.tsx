@@ -5,6 +5,7 @@ import React from 'react'
 import {Link, Outlet, useNavigate, useParams} from 'react-router-dom'
 import styled from 'styled-components'
 import {Button, IconButton} from '../components/button'
+import {ContrastMode} from '../components/contrast-toggle'
 import {ExportScales} from '../components/export-scales'
 import {ImportScales} from '../components/import-scales'
 import {Input} from '../components/input'
@@ -104,6 +105,8 @@ const Main = styled.main`
 export type PaletteOutletContext = {
   leftSidebarOpen: boolean
   setLeftSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>
+  contrastMode: ContrastMode
+  setContrastMode: React.Dispatch<React.SetStateAction<ContrastMode>>
 }
 
 export function Palette() {
@@ -111,6 +114,7 @@ export function Palette() {
   const navigate = useNavigate()
   const [state, send] = useGlobalState()
   const [leftSidebarOpen, setLeftSidebarOpen] = React.useState(true)
+  const [contrastMode, setContrastMode] = React.useState<ContrastMode>('selected')
   const palette = state.context.palettes[paletteId]
 
   if (!palette) {
@@ -370,7 +374,7 @@ export function Palette() {
         </SidebarPanel>
       </div>
       <Main>
-        <Outlet context={{leftSidebarOpen, setLeftSidebarOpen}} />
+        <Outlet context={{leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode}} />
       </Main>
     </Wrapper>
   )

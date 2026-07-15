@@ -1,4 +1,5 @@
 import {
+  Check,
   CheckCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -6,14 +7,16 @@ import {
   PanelRightOpen,
   Plus,
   Trash2,
+  X,
   XCircle
 } from 'lucide-react'
 import {Box, ButtonGroup, Text} from '@primer/react'
-import {getContrast} from 'color2k'
+import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
 import {Link, useNavigate, useOutletContext, useParams} from 'react-router-dom'
 import {Button, IconButton} from '../components/button'
 import {Color} from '../components/color'
+import {ContrastToggle} from '../components/contrast-toggle'
 import {CurveEditor} from '../components/curve-editor'
 import {Input} from '../components/input'
 import {Select} from '../components/select'
@@ -24,7 +27,7 @@ import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {PaletteOutletContext} from './palette'
 import {Curve} from '../types'
-import {colorToHex, getColor, getColorName, getContrastScore, getRange} from '../utils'
+import {colorToHex, getColor, getColorName, getContrastScore, getNearestContrasting, getRange} from '../utils'
 
 export function Scale() {
   const {paletteId = '', scaleId = ''} = useParams()
@@ -36,7 +39,7 @@ export function Scale() {
   const [nameDraft, setNameDraft] = React.useState('')
   // Left panel lives in the parent <Palette>; its toggle is shared via Outlet
   // context. The right panel is local to this view.
-  const {leftSidebarOpen, setLeftSidebarOpen} = useOutletContext<PaletteOutletContext>()
+  const {leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode} = useOutletContext<PaletteOutletContext>()
   const [rightSidebarOpen, setRightSidebarOpen] = React.useState(true)
   const [state, send] = useGlobalState()
   const palette = state.context.palettes[paletteId]
@@ -68,6 +71,16 @@ export function Scale() {
     const focusedColor = index ? getColor(palette.curves, scale, parseInt(index, 10)) : undefined
     focusedHex = focusedColor ? colorToHex(focusedColor) : undefined
   } catch (error) {}
+
+  // What each swatch's contrast score is measured against: either the selected
+  // color in this scale (relative), or the palette background. The stripe draws
+  // this color as ink so the number and the preview stay in sync.
+  const contrastReference = contrastMode === 'background' ? palette.backgroundColor : focusedHex
+  const scaleHexes = scale.colors.map((_, i) => colorToHex(getColor(palette.curves, scale, i)))
+  // The darkest color in the scale, used as the label halo / failing mark so it
+  // reads on the (typically light) swatches where contrast fails, while staying
+  // drawn from the scale's own colors.
+  const shadowColor = scaleHexes.reduce((darkest, hex) => (getLuminance(hex) < getLuminance(darkest) ? hex : darkest))
 
   return (
     <div
@@ -113,6 +126,7 @@ export function Scale() {
                 )
               })}
             </ButtonGroup>
+            <ContrastToggle value={contrastMode} onChange={setContrastMode} />
           </Box>
           <IconButton
             aria-label={rightSidebarOpen ? 'Hide right panel' : 'Show right panel'}
@@ -150,7 +164,7 @@ export function Scale() {
             {scale.colors.map((_, i) => {
               const color = getColor(palette.curves, scale, i)
               const hex = colorToHex(color)
-              const contrast = focusedHex ? getContrast(hex, focusedHex) : undefined
+              const contrast = contrastReference ? getContrast(hex, contrastReference) : undefined
               const contrastScore = contrast ? getContrastScore(contrast) : undefined
               return (
                 <Box
@@ -161,7 +175,7 @@ export function Scale() {
                     outline: 'none',
                     width: '100%',
                     height: '100%',
-                    color: focusedHex,
+                    color: contrastReference,
                     backgroundColor: hex,
                     borderTopLeftRadius: i === 0 ? 2 : 0,
                     borderBottomLeftRadius: i === 0 ? 2 : 0,
@@ -268,21 +282,49 @@ export function Scale() {
                       </Box>
                     )}
                   </Box>
-                  <Box display="flex" alignItems="center" flexDirection="column">
-                    <span
-                      style={{
-                        transform: 'rotate(180deg)',
-                        textOrientation: 'sideways',
-                        writingMode: 'vertical-lr',
-                        whiteSpace: 'nowrap',
-                        textAlign: 'right',
-                        marginInlineEnd: 5,
-                        lineHeight: 1
-                      }}
-                    >
-                      {contrastScore}{' '}
-                    </span>
-                    {contrastScore === 'Fail' ? <XCircle size={16} /> : <CheckCircle size={16} />}
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    flexDirection="column"
+                    sx={{
+                      gap: 1,
+                      lineHeight: 1,
+                      // Only failing labels risk being illegible against their
+                      // swatch, so only they get the readable halo.
+                      textShadow:
+                        contrastScore === 'Fail' ? `0 0 1px ${shadowColor}, 0 0 2px ${shadowColor}` : undefined
+                    }}
+                  >
+                    <span style={{fontWeight: 'normal'}}>{contrast ? contrast.toFixed(2) : ''}</span>
+                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+                      {/* The mark previews the measured pairing: the disc is the
+                          ink color (like the label text) with the swatch color
+                          punched through. A failing mark would vanish into the
+                          disc (that low contrast is the failure), so it switches
+                          to the nearest scale color that reads on the disc. */}
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          placeItems: 'center',
+                          flexShrink: 0,
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          backgroundColor: contrastReference
+                        }}
+                      >
+                        {contrastScore === 'Fail' ? (
+                          <X
+                            size={11}
+                            strokeWidth={4}
+                            color={getNearestContrasting(scaleHexes, i, contrastReference || hex)}
+                          />
+                        ) : (
+                          <Check size={11} strokeWidth={4} color={hex} />
+                        )}
+                      </Box>
+                      <span>{contrastScore}</span>
+                    </Box>
                   </Box>
                 </Box>
               )
