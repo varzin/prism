@@ -1,5 +1,5 @@
 import {ExternalLink, Palette as PaletteIcon, Plus, Trash2} from 'lucide-react'
-import {Box, Button, Heading, IconButton as PrimerIconButton, Label, Link as PrimerLink, Text} from '@primer/react'
+import {Box, Button, Heading, IconButton as PrimerIconButton, Link as PrimerLink, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import {Link, useNavigate} from 'react-router-dom'
 import {v4 as uniqueId} from 'uuid'
@@ -33,7 +33,6 @@ export function Index() {
           <Box as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
             Primer Prism
           </Box>
-          <Label variant="attention">Experimental</Label>
         </Box>
         <Box sx={{display: 'flex', alignItems: 'center'}}>
           <PrimerLink

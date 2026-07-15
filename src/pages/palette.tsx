@@ -1,5 +1,5 @@
-import {Palette as PaletteIcon, Redo2, Undo2} from 'lucide-react'
-import {Box, Text, Label} from '@primer/react'
+import {CircleQuestionMark, Palette as PaletteIcon, Redo2, Undo2} from 'lucide-react'
+import {AnchoredOverlay, Box, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
 import {Link, Outlet, useNavigate, useParams} from 'react-router-dom'
@@ -15,6 +15,64 @@ import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {Color} from '../types'
 import {colorToHex, getColor} from '../utils'
+
+// Instructions for creating a curve, shown in the Curves "?" help popover.
+function CurveInstructions() {
+  return (
+    <Text sx={{fontSize: 1, color: 'fg.muted'}}>
+      Open a scale and press the{' '}
+      <Text as="span" sx={{fontWeight: 'bold'}}>
+        +
+      </Text>{' '}
+      next to Hue, Saturation, or Lightness curve to create a reusable curve from it.
+    </Text>
+  )
+}
+
+// A "?" button next to the Curves heading that reveals the creation
+// instructions in a popover, so the guidance is reachable even once curves
+// exist and the empty state is gone.
+function CurvesHelp() {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <AnchoredOverlay
+      open={open}
+      onOpen={() => setOpen(true)}
+      onClose={() => setOpen(false)}
+      renderAnchor={anchorProps => (
+        <Box
+          as="button"
+          type="button"
+          aria-label="How to create a curve"
+          {...anchorProps}
+          sx={{
+            all: 'unset',
+            display: 'flex',
+            flexShrink: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: 'var(--color-text)',
+            opacity: 0.6,
+            borderRadius: 2,
+            '&:hover': {opacity: 1},
+            '&:focus-visible': {
+              outline: '2px solid var(--color-accent-emphasis, #0969da)',
+              outlineOffset: '2px'
+            }
+          }}
+        >
+          <CircleQuestionMark size={16} />
+        </Box>
+      )}
+      overlayProps={{role: 'dialog', 'aria-label': 'How to create a curve'}}
+    >
+      <Box sx={{p: 3, width: 240}}>
+        <CurveInstructions />
+      </Box>
+    </AnchoredOverlay>
+  )
+}
 
 const Wrapper = styled.div<{backgroundColor: string; $sidebarOpen: boolean}>`
   --color-text: ${props => readableColor(props.backgroundColor)};
@@ -89,14 +147,6 @@ export function Palette() {
             <Text as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
               Primer Prism
             </Text>
-            <Label
-              sx={{
-                color: 'var(--color-text)',
-                borderColor: 'var(--color-text)'
-              }}
-            >
-              Experimental
-            </Label>
           </Text>
         </Link>
 
@@ -254,7 +304,7 @@ export function Palette() {
           </Button>
         </SidebarPanel>
         <Separator />
-        <SidebarPanel title="Curves">
+        <SidebarPanel title="Curves" action={<CurvesHelp />}>
           <VStack spacing={8}>
             {Object.values(palette.curves).map(curve => (
               <Link
