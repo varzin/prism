@@ -1,4 +1,14 @@
-import {Check, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Trash2, X} from 'lucide-react'
+import {
+  Check,
+  Contrast,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Plus,
+  Trash2,
+  X
+} from 'lucide-react'
 import {Box, ButtonGroup, Text} from '@primer/react'
 import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
@@ -30,6 +40,7 @@ export function Scale() {
   // context. The right panel is local to this view.
   const {leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode} = useOutletContext<PaletteOutletContext>()
   const [rightSidebarOpen, setRightSidebarOpen] = React.useState(true)
+  const [showContrastCurve, setShowContrastCurve] = React.useState(false)
   const [state, send] = useGlobalState()
   const palette = state.context.palettes[paletteId]
   const scale = palette.scales[scaleId]
@@ -221,6 +232,10 @@ export function Scale() {
   // this color as ink so the number and the preview stay in sync.
   const contrastReference = contrastMode === 'background' ? palette.backgroundColor : focusedHex
   const scaleHexes = scale.colors.map((_, i) => colorToHex(getColor(palette.curves, scale, i)))
+  // Per-swatch contrast against contrastReference, plotted as a read-only curve
+  // (see the Contrast toggle button) so the shape of the contrast change across
+  // the scale is visible alongside the H/S/L curves.
+  const contrastCurveValues = scaleHexes.map(hex => (contrastReference ? getContrast(hex, contrastReference) : 1))
   // The darkest color in the scale, used as the label halo / failing mark so it
   // reads on the (typically light) swatches where contrast fails, while staying
   // drawn from the scale's own colors.
@@ -271,6 +286,15 @@ export function Scale() {
               })}
             </ButtonGroup>
             <ContrastToggle value={contrastMode} onChange={setContrastMode} />
+            <IconButton
+              aria-label={showContrastCurve ? 'Hide contrast curve' : 'Show contrast curve'}
+              aria-pressed={showContrastCurve}
+              icon={() => <Contrast size={16} />}
+              onClick={() => setShowContrastCurve(show => !show)}
+              style={{
+                background: showContrastCurve ? 'var(--color-background-secondary)' : 'var(--color-background)'
+              }}
+            />
           </Box>
           <IconButton
             aria-label={rightSidebarOpen ? 'Hide right panel' : 'Show right panel'}
@@ -490,6 +514,9 @@ export function Scale() {
                 />
               )
             })}
+          {showContrastCurve ? (
+            <CurveEditor key="contrast-curve" values={contrastCurveValues} min={1} max={21} disabled label="C" />
+          ) : null}
           {(['hue', 'saturation', 'lightness'] as const)
             .filter(type => visibleCurves[type])
             .map(type => {
