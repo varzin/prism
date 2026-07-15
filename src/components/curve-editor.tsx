@@ -23,27 +23,29 @@ type CurveEditorProps = {
   style?: React.SVGAttributes<SVGSVGElement>['style']
 }
 
-// TODO: arrow key support
+export type CurveEditorHandle = {
+  focusPoint: (index: number) => void
+  focusLine: () => void
+}
+
 // TODO: snap to guides
-// TODO: focus status
 // TODO: label
-export function CurveEditor({
-  values,
-  min,
-  max,
-  onChange,
-  onFocus,
-  onBlur,
-  step = 0.1,
-  disabled = false,
-  label = '',
-  style = {}
-}: CurveEditorProps) {
+export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>(function CurveEditor(
+  {values, min, max, onChange, onFocus, onBlur, step = 0.1, disabled = false, label = '', style = {}},
+  handleRef
+) {
   const [ref, {width, height}] = useMeasure()
   const nodeRadius = 20
   const columnWidth = width / values.length
   const [dragging, setDragging] = React.useState<number | 'line' | false>(false)
   const [focused, setFocused] = React.useState<number | 'line' | false>(false)
+  const pointRefs = React.useRef<(SVGGElement | null)[]>([])
+  const lineRef = React.useRef<SVGGElement | null>(null)
+
+  React.useImperativeHandle(handleRef, () => ({
+    focusPoint: index => pointRefs.current[index]?.focus(),
+    focusLine: () => lineRef.current?.focus()
+  }))
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const xScale = React.useCallback(
@@ -79,6 +81,10 @@ export function CurveEditor({
       // column reserves matching left padding in scale.tsx.
       style={{position: 'relative', overflow: 'visible'}}
       onKeyDown={event => {
+        // Alt/Option+Arrow is reserved for switching scales (handled by the
+        // page that hosts this editor), so let it bubble up untouched.
+        if (event.altKey) return
+
         let delta: number | undefined
         switch (event.key) {
           case 'ArrowUp':
@@ -117,6 +123,11 @@ export function CurveEditor({
               focused
             )
           }
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          if (typeof focused === 'number') {
+            const neighbor = focused + (event.key === 'ArrowRight' ? 1 : -1)
+            pointRefs.current[Math.max(0, Math.min(values.length - 1, neighbor))]?.focus()
+          }
         }
       }}
     >
@@ -147,6 +158,7 @@ export function CurveEditor({
       >
         <Box
           as="g"
+          ref={lineRef}
           pointerEvents={disabled || (dragging !== false && dragging !== 'line') ? 'none' : 'all'}
           sx={{
             outline: 'none',
@@ -226,6 +238,7 @@ export function CurveEditor({
         >
           <Box
             as="g"
+            ref={el => (pointRefs.current[index] = el)}
             pointerEvents={disabled ? 'none' : 'all'}
             sx={{
               '& .target': {
@@ -318,4 +331,4 @@ export function CurveEditor({
       ))}
     </svg>
   )
-}
+})

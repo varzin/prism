@@ -6,7 +6,7 @@ import {useNavigate, useOutletContext, useParams} from 'react-router-dom'
 import {Button, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {ContrastToggle} from '../components/contrast-toggle'
-import {CurveEditor} from '../components/curve-editor'
+import {CurveEditor, CurveEditorHandle} from '../components/curve-editor'
 import {Input} from '../components/input'
 import {Select} from '../components/select'
 import {Separator} from '../components/separator'
@@ -40,10 +40,165 @@ export function Scale() {
     lightness: true
   })
 
+  // Which of the 3 columns (left scales list / center scale view / right
+  // fields) keyboard navigation is currently on, and which H/S/L curve is
+  // "active" for Tab/Shift+Tab and for re-focusing a point in the center panel.
+  const [activePanel, setActivePanel] = React.useState<'left' | 'center' | 'right' | null>(null)
+  const [activeCurveType, setActiveCurveType] = React.useState<Curve['type']>('hue')
+  const curveEditorRefs = React.useRef<Partial<Record<Curve['type'], CurveEditorHandle | null>>>({})
+  const nameInputRef = React.useRef<HTMLInputElement>(null)
+
   // Close any open name editor when navigating between scales.
   React.useEffect(() => {
     setEditingName(null)
   }, [scaleId])
+
+  // [ / ] move the active panel (left <-> center <-> right, clamped, skipping
+  // a closed panel). Shift+[ / Shift+] toggle the left/right panel instead.
+  // While the center panel is active, Left/Right panel-switching keys are
+  // physical-key-based (event.code) so Shift+[ still resolves correctly even
+  // though Shift turns "[" into "{" on most layouts.
+  React.useEffect(() => {
+    function isTypingTarget(target: EventTarget | null) {
+      return (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      )
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
+        if (isTypingTarget(event.target)) return
+        event.preventDefault()
+
+        if (event.shiftKey) {
+          if (event.code === 'BracketLeft') {
+            setLeftSidebarOpen(open => !open)
+            setActivePanel(current => (current === 'left' ? 'center' : current))
+          } else {
+            setRightSidebarOpen(open => !open)
+            setActivePanel(current => (current === 'right' ? 'center' : current))
+          }
+          return
+        }
+
+        const available = (['left', 'center', 'right'] as const).filter(
+          panel => (panel !== 'left' || leftSidebarOpen) && (panel !== 'right' || rightSidebarOpen)
+        )
+        const direction = event.code === 'BracketRight' ? 1 : -1
+        setActivePanel(current => {
+          const currentIndex = current ? available.indexOf(current) : -1
+          const nextIndex =
+            currentIndex === -1 ? 0 : Math.max(0, Math.min(available.length - 1, currentIndex + direction))
+          return available[nextIndex] ?? current
+        })
+        return
+      }
+
+      // Cyclic: wraps around at both ends. Shared by the left panel's plain
+      // arrows and the Alt+Arrow scale switch below.
+      function switchScale(direction: 1 | -1) {
+        const ids = Object.keys(palette.scales)
+        if (ids.length === 0) return
+        const currentIndex = ids.indexOf(scaleId)
+        const nextIndex =
+          ((((currentIndex === -1 ? 0 : currentIndex) + direction) % ids.length) + ids.length) % ids.length
+        const nextId = ids[nextIndex]
+        if (nextId && nextId !== scaleId) {
+          navigate(`${routePrefix}/local/${paletteId}/scale/${nextId}`)
+        }
+      }
+
+      // Alt/Opt+Arrow switches scales from anywhere on the page, regardless of
+      // which panel (if any) is active. It only refocuses a point afterwards
+      // if one was already focused (activePanel === 'center'; see the
+      // scaleId-change effect below) - it never selects one on its own.
+      if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault()
+        switchScale(event.key === 'ArrowDown' ? 1 : -1)
+        return
+      }
+
+      if (activePanel === 'left' && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault()
+        switchScale(event.key === 'ArrowDown' ? 1 : -1)
+        return
+      }
+
+      if (activePanel === 'center' && event.key === 'Tab') {
+        event.preventDefault()
+        const visibleTypes = (['hue', 'saturation', 'lightness'] as const).filter(type => visibleCurves[type])
+        setActiveCurveType(current => {
+          if (visibleTypes.length === 0) return current
+          const currentIndex = visibleTypes.indexOf(current)
+          const direction = event.shiftKey ? -1 : 1
+          // Cyclic: switching curves wraps around at both ends (unlike panel
+          // navigation, which clamps).
+          const nextIndex =
+            ((((currentIndex === -1 ? 0 : currentIndex) + direction) % visibleTypes.length) + visibleTypes.length) %
+            visibleTypes.length
+          return visibleTypes[nextIndex]
+        })
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    activePanel,
+    leftSidebarOpen,
+    rightSidebarOpen,
+    palette.scales,
+    scaleId,
+    paletteId,
+    navigate,
+    visibleCurves,
+    setLeftSidebarOpen
+  ])
+
+  // Landing on a panel focuses its natural entry point: the current scale in
+  // the left list, the last-selected point in the center curves, or the first
+  // field on the right.
+  React.useEffect(() => {
+    if (!scale) return
+
+    if (activePanel === 'left') {
+      document.getElementById(`scale-link-${scaleId}`)?.focus()
+    } else if (activePanel === 'center') {
+      const visibleTypes = (['hue', 'saturation', 'lightness'] as const).filter(type => visibleCurves[type])
+      const type = visibleTypes.includes(activeCurveType) ? activeCurveType : visibleTypes[0]
+      const clampedIndex = Math.min(Number(selectedIndex), scale.colors.length - 1)
+      if (type) curveEditorRefs.current[type]?.focusPoint(clampedIndex)
+    } else if (activePanel === 'right') {
+      nameInputRef.current?.focus()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePanel])
+
+  // Switching scales (left panel arrows, or Alt+Arrow from anywhere) changes
+  // scaleId; keep the equivalent thing focused in the new scale - the scale's
+  // link on the left, or the same point index on the active curve. If neither
+  // panel was active (e.g. Alt+Arrow pressed with no point selected), leave
+  // focus/selection alone rather than selecting something new.
+  React.useEffect(() => {
+    if (activePanel === 'left') {
+      document.getElementById(`scale-link-${scaleId}`)?.focus()
+    } else if (activePanel === 'center' && scale) {
+      const clampedIndex = Math.min(Number(selectedIndex), scale.colors.length - 1)
+      curveEditorRefs.current[activeCurveType]?.focusPoint(clampedIndex)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scaleId])
+
+  // Tab/Shift+Tab in the center panel changes activeCurveType; keep the same
+  // point index focused on the newly active curve.
+  React.useEffect(() => {
+    if (activePanel !== 'center' || !scale) return
+    const clampedIndex = Math.min(Number(selectedIndex), scale.colors.length - 1)
+    curveEditorRefs.current[activeCurveType]?.focusPoint(clampedIndex)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCurveType])
 
   if (!scale) {
     return (
@@ -141,6 +296,7 @@ export function Scale() {
             setActiveSeam(Math.abs(x - seamX) <= 16 ? seam : null)
           }}
           onMouseLeave={() => setActiveSeam(null)}
+          onFocusCapture={() => setActivePanel('center')}
         >
           <Box
             sx={{
@@ -340,10 +496,14 @@ export function Scale() {
               return (
                 <CurveEditor
                   key={type}
+                  ref={handle => (curveEditorRefs.current[type] = handle)}
                   values={scale.colors.map((color, index) => getColor(palette.curves, scale, index)[type])}
                   {...getRange(type)}
                   label={`${type[0].toUpperCase()}`}
-                  onFocus={index => setIndex(String(index))}
+                  onFocus={index => {
+                    setIndex(String(index))
+                    setActiveCurveType(type)
+                  }}
                   onChange={(values, shiftKey, index) => {
                     if (shiftKey && scale.curves[type]) {
                       send({
@@ -487,6 +647,7 @@ export function Scale() {
           overflow: 'auto',
           paddingBottom: 16
         }}
+        onFocusCapture={() => setActivePanel('right')}
       >
         <SidebarPanel
           title="Scale"
@@ -508,6 +669,7 @@ export function Scale() {
                 Name
               </label>
               <Input
+                ref={nameInputRef}
                 type="text"
                 aria-label="Scale name"
                 value={scale.name}

@@ -270,6 +270,7 @@ export function Palette() {
             {Object.values(palette.scales).map(scale => (
               <Link
                 key={scale.id}
+                id={`scale-link-${scale.id}`}
                 to={`scale/${scale.id}`}
                 style={{
                   color: 'inherit',
