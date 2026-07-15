@@ -13,7 +13,7 @@ import {
 import {Box, ButtonGroup, Text} from '@primer/react'
 import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
-import {Link, useNavigate, useOutletContext, useParams} from 'react-router-dom'
+import {useNavigate, useOutletContext, useParams} from 'react-router-dom'
 import {Button, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {ContrastToggle} from '../components/contrast-toggle'
@@ -488,47 +488,6 @@ export function Scale() {
             })}
           </Box>
         </ZStack>
-        {index ? (
-          <div style={{flexShrink: 0, display: 'flex', height: 48}}>
-            {Object.values(palette.scales)
-              .filter(scale => scale.colors.length > parseInt(index))
-              .map((currentScale, i) => {
-                const numScales = Object.values(palette.scales).filter(
-                  scale => scale.colors.length > parseInt(index)
-                ).length
-                return (
-                  <Box
-                    key={i}
-                    as={Link}
-                    aria-label={`Go to ${currentScale.name} scale`}
-                    to={`${routePrefix}/local/${paletteId}/scale/${currentScale.id}`}
-                    replace={true}
-                    sx={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: colorToHex(getColor(palette.curves, currentScale, parseInt(index))),
-                      borderTopLeftRadius: i === 0 ? 2 : 0,
-                      borderBottomLeftRadius: i === 0 ? 2 : 0,
-                      borderTopRightRadius: i === numScales - 1 ? 2 : 0,
-                      borderBottomRightRadius: i === numScales - 1 ? 2 : 0,
-                      position: 'relative',
-                      '&::before': {
-                        content: '""',
-                        display: scale.id === currentScale.id ? 'block' : 'none',
-                        position: 'absolute',
-                        top: '-8px',
-                        height: 4,
-                        left: 0,
-                        right: 0,
-                        backgroundColor: 'var(--color-text)',
-                        borderRadius: 2
-                      }
-                    }}
-                  />
-                )
-              })}
-          </div>
-        ) : null}
       </div>
       <VStack
         style={{
