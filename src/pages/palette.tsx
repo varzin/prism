@@ -149,7 +149,7 @@ export function Palette() {
           <Text sx={{display: 'flex', alignItems: 'center'}}>
             <PaletteIcon size={32} />
             <Text as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
-              Primer Prism
+              Nectary Prism
             </Text>
           </Text>
         </Link>

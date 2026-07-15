@@ -14,5 +14,5 @@ test('renders the home page without crashing', () => {
   )
 
   // The header title is present on the home route (matched via the /prism basename).
-  expect(screen.getByRole('heading', {name: 'Primer Prism', level: 1})).toBeInTheDocument()
+  expect(screen.getByRole('heading', {name: 'Nectary Prism', level: 1})).toBeInTheDocument()
 })

@@ -4,7 +4,7 @@ Prism Plus is a fork of the [Github's Primar Prism](https://github.com/primer/pr
 
 ![A screenshot of Primer Prism](https://user-images.githubusercontent.com/4608155/172450729-c88a40bc-3273-4aeb-83a4-2610a0c68ecc.png)
 
-# Primer Prism
+# Nectary Prism
 
 ## Run locally
 

@@ -31,7 +31,7 @@ export function Index() {
         <Box sx={{display: 'flex', alignItems: 'center'}}>
           <PaletteIcon size={32} />
           <Box as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
-            Primer Prism
+            Nectary Prism
           </Box>
         </Box>
         <Box sx={{display: 'flex', alignItems: 'center'}}>
@@ -190,7 +190,7 @@ export function Index() {
               Welcome
             </Heading>
             <Text sx={{marginBottom: 5, fontSize: 3, color: 'fg.muted'}}>
-              Primer Prism is a tool for creating cohesive, consistent, and accessible color palettes
+              Nectary Prism is a tool for creating cohesive, consistent, and accessible color palettes
             </Text>
             <Button variant="primary" size="large" onClick={createPalette}>
               Create new palette
