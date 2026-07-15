@@ -20,10 +20,10 @@ export const Button = styled(PrimerButton)`
   }
 `
 
-export const IconButton = styled(PrimerIconButton)`
+export const IconButton = styled(PrimerIconButton)<{$transparent?: boolean}>`
   color: var(--color-text);
-  background-color: var(--color-background-secondary);
-  border: 1px solid var(--color-border);
+  background-color: ${props => (props.$transparent ? 'transparent' : 'var(--color-background-secondary)')};
+  border: ${props => (props.$transparent ? '1px solid transparent' : '1px solid var(--color-border)')};
   box-shadow: none;
   margin: 0;
 

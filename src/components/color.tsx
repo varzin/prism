@@ -1,9 +1,10 @@
 import {Box} from '@primer/react'
 import {toHsla, toRgba} from 'color2k'
+import {Trash2} from 'lucide-react'
 import React from 'react'
 import {useGlobalState} from '../global-state'
 import {colorToHex, getColor, getColorName} from '../utils'
-import {Button} from './button'
+import {IconButton} from './button'
 import {Input} from './input'
 import {SidebarPanel} from './sidebar-panel'
 import {VStack} from './stack'
@@ -23,7 +24,25 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
   const hex = colorToHex(computedColor)
 
   return (
-    <SidebarPanel title={`${scale.name}.${getColorName(scale.colors, indexAsNumber)}`}>
+    <SidebarPanel
+      title={`${scale.name}.${getColorName(scale.colors, indexAsNumber)}`}
+      action={
+        <IconButton
+          $transparent
+          aria-label="Delete color"
+          icon={() => <Trash2 size={16} />}
+          disabled={scale.colors.length === 1}
+          onClick={() =>
+            send({
+              type: 'DELETE_COLOR',
+              paletteId,
+              scaleId,
+              index: parseInt(index)
+            })
+          }
+        />
+      }
+    >
       <VStack spacing={16}>
         <Box sx={{width: '100%', height: 48, background: hex, borderRadius: 1}} />
         <div
@@ -122,20 +141,6 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
         <Box as="code" sx={{fontFamily: 'mono', fontSize: 1}}>
           {toHsla(hex)}
         </Box>
-
-        <Button
-          onClick={() =>
-            send({
-              type: 'DELETE_COLOR',
-              paletteId,
-              scaleId,
-              index: parseInt(index)
-            })
-          }
-          disabled={scale.colors.length === 1}
-        >
-          Delete color
-        </Button>
       </VStack>
     </SidebarPanel>
   )

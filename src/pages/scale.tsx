@@ -1,4 +1,13 @@
-import {CheckCircle, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, XCircle} from 'lucide-react'
+import {
+  CheckCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Plus,
+  Trash2,
+  XCircle
+} from 'lucide-react'
 import {Box, ButtonGroup, Text} from '@primer/react'
 import {getContrast} from 'color2k'
 import React from 'react'
@@ -489,7 +498,20 @@ export function Scale() {
           paddingBottom: 16
         }}
       >
-        <SidebarPanel title="Scale">
+        <SidebarPanel
+          title="Scale"
+          action={
+            <IconButton
+              $transparent
+              aria-label="Delete scale"
+              icon={() => <Trash2 size={16} />}
+              onClick={() => {
+                send({type: 'DELETE_SCALE', paletteId, scaleId})
+                navigate(`${routePrefix}/local/${paletteId}`)
+              }}
+            />
+          }
+        >
           <VStack spacing={16}>
             <VStack spacing={4}>
               <label htmlFor="name" style={{fontSize: 14}}>
@@ -509,14 +531,6 @@ export function Scale() {
                 }
               />
             </VStack>
-            <Button
-              onClick={() => {
-                send({type: 'DELETE_SCALE', paletteId, scaleId})
-                navigate(`${routePrefix}/local/${paletteId}`)
-              }}
-            >
-              Delete scale
-            </Button>
           </VStack>
         </SidebarPanel>
         <Separator />
