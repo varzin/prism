@@ -4,7 +4,7 @@ import {Trash2} from 'lucide-react'
 import React from 'react'
 import {useGlobalState} from '../global-state'
 import {colorToHex, getColor, getColorName} from '../utils'
-import {IconButton} from './button'
+import {icon16, IconButton} from './button'
 import {Input} from './input'
 import {SidebarPanel} from './sidebar-panel'
 import {VStack} from './stack'
@@ -30,7 +30,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
         <IconButton
           $transparent
           aria-label="Delete color"
-          icon={() => <Trash2 size={16} />}
+          icon={icon16(Trash2)}
           disabled={scale.colors.length === 1}
           onClick={() =>
             send({

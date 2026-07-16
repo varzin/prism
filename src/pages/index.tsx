@@ -3,7 +3,7 @@ import {Box, Button, Heading, IconButton as PrimerIconButton, Link as PrimerLink
 import {mix, readableColor} from 'color2k'
 import {Link, useNavigate} from 'react-router-dom'
 import {v4 as uniqueId} from 'uuid'
-import {IconButton} from '../components/button'
+import {icon16, IconButton} from '../components/button'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {colorToHex, getColor} from '../utils'
@@ -47,7 +47,7 @@ export function Index() {
           </PrimerLink>
           <PrimerIconButton
             aria-label="Create new palette"
-            icon={() => <Plus size={16} />}
+            icon={icon16(Plus)}
             onClick={createPalette}
             sx={{margin: 0}}
           />
@@ -140,7 +140,7 @@ export function Index() {
               </Box>
               <IconButton
                 aria-label="Delete palette"
-                icon={() => <Trash2 size={16} />}
+                icon={icon16(Trash2)}
                 onClick={() => {
                   send({type: 'DELETE_PALETTE', paletteId: palette.id})
                 }}

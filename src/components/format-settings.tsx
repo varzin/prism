@@ -4,7 +4,7 @@ import {Settings} from 'lucide-react'
 import React from 'react'
 import {useFormatTemplate} from '../format-context'
 import {DEFAULT_TEMPLATE, PLACEHOLDERS, previewTemplate} from '../format'
-import {IconButton} from './button'
+import {icon16, IconButton} from './button'
 import {VStack} from './stack'
 
 const TABS = [
@@ -94,7 +94,7 @@ export function FormatSettings() {
 
   return (
     <>
-      <IconButton aria-label="Settings" icon={() => <Settings size={16} />} onClick={open} />
+      <IconButton aria-label="Settings" icon={icon16(Settings)} onClick={open} />
       {isOpen ? (
         <Dialog
           title="Settings"

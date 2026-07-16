@@ -1,4 +1,6 @@
 import {ButtonGroup as PrimerButtonGroup, Button as PrimerButton, IconButton as PrimerIconButton} from '@primer/react'
+import {LucideIcon} from 'lucide-react'
+import React from 'react'
 import styled from 'styled-components'
 
 // Primer's ButtonGroup squares off the inner corners of its *direct* children to
@@ -59,7 +61,7 @@ export const Button = styled(PrimerButton)`
   }
 `
 
-export const IconButton = styled(PrimerIconButton)<{$transparent?: boolean}>`
+const StyledIconButton = styled(PrimerIconButton)<{$transparent?: boolean}>`
   color: var(--color-text);
   background-color: ${props => (props.$transparent ? 'transparent' : 'var(--color-background)')};
   border: ${props => (props.$transparent ? '1px solid transparent' : '1px solid var(--color-border)')};
@@ -83,3 +85,36 @@ export const IconButton = styled(PrimerIconButton)<{$transparent?: boolean}>`
     opacity: 0.5;
   }
 `
+
+const sizedIcons = new Map<LucideIcon, React.ComponentType>()
+
+// Wraps a lucide icon at the 16px every button here wants, handing back the very
+// same component for the same icon every time.
+//
+// The sizing is incidental; the identity is the point. Primer takes `icon` as a
+// component *type* and renders <Icon />, so the obvious `icon={() => <X
+// size={16} />}` hands it a brand new type on every render and React dutifully
+// tears the icon's DOM down and builds it again each time.
+//
+// That stays invisible right up until a render lands between a press and its
+// release -- a blur handler setting state as the button takes focus, say. Then
+// mouseup arrives on a node that did not exist at mousedown and shares no
+// ancestor with the one that did, the browser has nowhere to fire click, and the
+// press is swallowed with no error anywhere: the button ignores you once, then
+// works on the second try.
+//
+// Passing an icon that depends on state (icon16(open ? A : B)) is still fine.
+// The identity changes only when the icon really does, which is a moment when
+// rebuilding it is both correct and not in the middle of a click.
+export function icon16(Icon: LucideIcon) {
+  let sized = sizedIcons.get(Icon)
+
+  if (!sized) {
+    sized = () => <Icon size={16} />
+    sizedIcons.set(Icon, sized)
+  }
+
+  return sized
+}
+
+export const IconButton = StyledIconButton

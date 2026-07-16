@@ -4,7 +4,7 @@ import {mix, readableColor} from 'color2k'
 import React from 'react'
 import {Link, Outlet, useNavigate, useParams} from 'react-router-dom'
 import styled from 'styled-components'
-import {Button, IconButton} from '../components/button'
+import {Button, icon16, IconButton} from '../components/button'
 import {ContrastMode} from '../components/contrast-toggle'
 import {ExportScales} from '../components/export-scales'
 import {FormatSettings} from '../components/format-settings'
@@ -167,7 +167,7 @@ export function Palette() {
         <HStack spacing={8}>
           <IconButton
             aria-label="Undo"
-            icon={() => <Undo2 size={16} />}
+            icon={icon16(Undo2)}
             onClick={() => send('UNDO')}
             disabled={state.context.past.length === 0}
           >
@@ -175,7 +175,7 @@ export function Palette() {
           </IconButton>
           <IconButton
             aria-label="Redo"
-            icon={() => <Redo2 size={16} />}
+            icon={icon16(Redo2)}
             onClick={() => send('REDO')}
             disabled={state.context.future.length === 0}
           />

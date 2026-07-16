@@ -16,11 +16,12 @@ import {Tooltip} from '@primer/react/drafts'
 import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
 import {useNavigate, useOutletContext, useParams} from 'react-router-dom'
-import {Button, ButtonGroup, IconButton} from '../components/button'
+import {Button, ButtonGroup, icon16, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {ContrastToggle} from '../components/contrast-toggle'
 import {CurveEditor, CurveEditorHandle} from '../components/curve-editor'
 import {Input} from '../components/input'
+import {ProportionalEditingToggle} from '../components/proportional-editing-toggle'
 import {Select} from '../components/select'
 import {Separator} from '../components/separator'
 import {SidebarPanel} from '../components/sidebar-panel'
@@ -62,6 +63,8 @@ export function Scale() {
     useOutletContext<PaletteOutletContext>()
   const [rightSidebarOpen, setRightSidebarOpen] = React.useState(true)
   const [showContrastCurve, setShowContrastCurve] = React.useState(false)
+  const [proportionalEditing, setProportionalEditing] = React.useState(false)
+  const [proportionalRadius, setProportionalRadius] = React.useState(2)
   const [state, send] = useGlobalState()
   const palette = state.context.palettes[paletteId]
   const scale = palette.scales[scaleId]
@@ -75,6 +78,11 @@ export function Scale() {
   // Which H/S/L curve is "active" for Tab/Shift+Tab and for re-focusing a point
   // in the center panel.
   const [activeCurveType, setActiveCurveType] = React.useState<Curve['type']>('hue')
+  // Which curve has a point in hand right now, so the other two can recede
+  // behind it. Distinct from activeCurveType, which remembers the last curve
+  // touched so Tab and the arrow keys have somewhere to land and therefore
+  // always names one: this goes back to null the moment the point is let go.
+  const [engagedCurveType, setEngagedCurveType] = React.useState<Curve['type'] | null>(null)
   const curveEditorRefs = React.useRef<Partial<Record<Curve['type'], CurveEditorHandle | null>>>({})
   const nameInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -271,6 +279,12 @@ export function Scale() {
   const shadowColor = scaleHexes.reduce((darkest, hex) => (getLuminance(hex) < getLuminance(darkest) ? hex : darkest))
   // Locked colors can still have their curve points selected, but not moved.
   const lockedIndices = scale.colors.map(color => Boolean(color.locked))
+  // A radius long enough to span the scale reaches every point from either end,
+  // so cap it there. Clamped on read rather than on change: deleting colors from
+  // a scale would otherwise trim a radius that its other scales still have room
+  // for, and the setting is shared across them.
+  const maxProportionalRadius = Math.max(1, scale.colors.length - 1)
+  const effectiveProportionalRadius = proportionalEditing ? Math.min(proportionalRadius, maxProportionalRadius) : 0
 
   return (
     <div
@@ -299,7 +313,7 @@ export function Scale() {
             <Tooltip text={leftSidebarOpen ? 'Hide Scales' : 'Show Scales'} direction="s">
               <IconButton
                 aria-label={leftSidebarOpen ? 'Hide Scales' : 'Show Scales'}
-                icon={() => (leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />)}
+                icon={icon16(leftSidebarOpen ? PanelLeftClose : PanelLeftOpen)}
                 onClick={() => setLeftSidebarOpen(open => !open)}
               />
             </Tooltip>
@@ -327,15 +341,22 @@ export function Scale() {
               <IconButton
                 aria-label={showContrastCurve ? 'Hide contrast curve' : 'Show contrast curve'}
                 aria-pressed={showContrastCurve}
-                icon={() => <ChartSpline size={16} />}
+                icon={icon16(ChartSpline)}
                 onClick={() => setShowContrastCurve(show => !show)}
               />
             </Tooltip>
+            <ProportionalEditingToggle
+              enabled={proportionalEditing}
+              onEnabledChange={setProportionalEditing}
+              radius={Math.min(proportionalRadius, maxProportionalRadius)}
+              onRadiusChange={setProportionalRadius}
+              max={maxProportionalRadius}
+            />
           </Box>
           <Tooltip text={rightSidebarOpen ? 'Hide Inspector' : 'Show Inspector'} direction="sw">
             <IconButton
               aria-label={rightSidebarOpen ? 'Hide Inspector' : 'Show Inspector'}
-              icon={() => (rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />)}
+              icon={icon16(rightSidebarOpen ? PanelRightClose : PanelRightOpen)}
               onClick={() => setRightSidebarOpen(open => !open)}
             />
           </Tooltip>
@@ -608,13 +629,17 @@ export function Scale() {
                   values={scale.colors.map((color, index) => getColor(palette.curves, scale, index)[type])}
                   {...getRange(type)}
                   lockedIndices={lockedIndices}
+                  proportionalRadius={effectiveProportionalRadius}
+                  dimmed={engagedCurveType !== null && engagedCurveType !== type}
                   label={`${type[0].toUpperCase()}`}
                   onFocus={index => {
                     setIndex(String(index))
                     setActiveCurveType(type)
+                    setEngagedCurveType(type)
                   }}
-                  onChange={(values, shiftKey, index) => {
-                    if (shiftKey && scale.curves[type]) {
+                  onBlur={() => setEngagedCurveType(current => (current === type ? null : current))}
+                  onChange={(values, editLinkedCurve, index) => {
+                    if (editLinkedCurve && scale.curves[type]) {
                       send({
                         type: 'CHANGE_CURVE_VALUES',
                         paletteId,
@@ -764,7 +789,7 @@ export function Scale() {
             <IconButton
               $transparent
               aria-label="Delete scale"
-              icon={() => <Trash2 size={16} />}
+              icon={icon16(Trash2)}
               onClick={() => {
                 send({type: 'DELETE_SCALE', paletteId, scaleId})
                 navigate(`${routePrefix}/local/${paletteId}`)
@@ -833,7 +858,7 @@ export function Scale() {
                 </Select>
                 <IconButton
                   aria-label="Create hue curve"
-                  icon={() => <Plus size={16} />}
+                  icon={icon16(Plus)}
                   onClick={() =>
                     send({
                       type: 'CREATE_CURVE_FROM_SCALE',
@@ -880,7 +905,7 @@ export function Scale() {
                     ))}
                 </Select>
                 <IconButton
-                  icon={() => <Plus size={16} />}
+                  icon={icon16(Plus)}
                   aria-label="Create saturation curve"
                   onClick={() =>
                     send({
@@ -929,7 +954,7 @@ export function Scale() {
                 </Select>
                 <IconButton
                   aria-label="Create lightness curve"
-                  icon={() => <Plus size={16} />}
+                  icon={icon16(Plus)}
                   onClick={() =>
                     send({
                       type: 'CREATE_CURVE_FROM_SCALE',

@@ -1,6 +1,6 @@
 import {Tooltip} from '@primer/react/drafts'
 import {LucideIcon, PaintBucket, Pipette} from 'lucide-react'
-import {ButtonGroup, IconButton} from './button'
+import {ButtonGroup, icon16, IconButton} from './button'
 
 // What the per-swatch contrast scores are measured against.
 //   'selected'   — the currently selected color in the scale (relative contrast)
@@ -25,7 +25,7 @@ export function ContrastToggle({value, onChange}: {value: ContrastMode; onChange
             <IconButton
               aria-label={label}
               aria-pressed={active}
-              icon={() => <Icon size={16} />}
+              icon={icon16(Icon)}
               onClick={() => onChange(optionValue)}
             />
           </Tooltip>
