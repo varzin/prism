@@ -1,6 +1,6 @@
 import {
+  ChartSpline,
   Check,
-  Contrast,
   Lock,
   LockOpen,
   PanelLeftClose,
@@ -11,11 +11,12 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import {Box, ButtonGroup, Text} from '@primer/react'
+import {Box, Text} from '@primer/react'
+import {Tooltip} from '@primer/react/drafts'
 import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
 import {useNavigate, useOutletContext, useParams} from 'react-router-dom'
-import {Button, IconButton} from '../components/button'
+import {Button, ButtonGroup, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {ContrastToggle} from '../components/contrast-toggle'
 import {CurveEditor, CurveEditorHandle} from '../components/curve-editor'
@@ -261,7 +262,7 @@ export function Scale() {
   const contrastReference = contrastMode === 'background' ? palette.backgroundColor : focusedHex
   const scaleHexes = scale.colors.map((_, i) => colorToHex(getColor(palette.curves, scale, i)))
   // Per-swatch contrast against contrastReference, plotted as a read-only curve
-  // (see the Contrast toggle button) so the shape of the contrast change across
+  // (see the contrast curve toggle button) so the shape of the contrast change across
   // the scale is visible alongside the H/S/L curves.
   const contrastCurveValues = scaleHexes.map(hex => (contrastReference ? getContrast(hex, contrastReference) : 1))
   // The darkest color in the scale, used as the label halo / failing mark so it
@@ -292,46 +293,52 @@ export function Scale() {
       >
         <Box sx={{flexShrink: 0, display: 'flex', justifyContent: 'space-between'}}>
           <Box sx={{display: 'flex', gap: 2}}>
-            <IconButton
-              aria-label={leftSidebarOpen ? 'Hide left panel' : 'Show left panel'}
-              aria-pressed={leftSidebarOpen}
-              icon={() => (leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />)}
-              onClick={() => setLeftSidebarOpen(open => !open)}
-            />
+            {/* The panel buttons show their state through the icon and label
+                rather than a pressed fill, so they carry no aria-pressed - that
+                would tint them like the toggles below. */}
+            <Tooltip text={leftSidebarOpen ? 'Hide Scales' : 'Show Scales'} direction="s">
+              <IconButton
+                aria-label={leftSidebarOpen ? 'Hide Scales' : 'Show Scales'}
+                icon={() => (leftSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />)}
+                onClick={() => setLeftSidebarOpen(open => !open)}
+              />
+            </Tooltip>
             <ButtonGroup>
               {Object.entries(visibleCurves).map(([type, isVisible]) => {
+                const label = `${isVisible ? 'Hide' : 'Show'} ${type} curve`
                 return (
-                  <Button
-                    key={type}
-                    aria-label={`Toggle ${type} curve visibility`}
-                    aria-pressed={isVisible}
-                    onClick={() => setVisibleCurves({...visibleCurves, [type]: !isVisible})}
-                    style={{
-                      background: isVisible ? 'var(--color-background-secondary)' : 'var(--color-background)'
-                    }}
-                  >
-                    {type[0].toUpperCase()}
-                  </Button>
+                  <Tooltip key={type} text={label} direction="s">
+                    <Button
+                      aria-label={label}
+                      aria-pressed={isVisible}
+                      onClick={() => setVisibleCurves({...visibleCurves, [type]: !isVisible})}
+                    >
+                      {type[0].toUpperCase()}
+                    </Button>
+                  </Tooltip>
                 )
               })}
             </ButtonGroup>
-            <ContrastToggle value={contrastMode} onChange={setContrastMode} />
-            <IconButton
-              aria-label={showContrastCurve ? 'Hide contrast curve' : 'Show contrast curve'}
-              aria-pressed={showContrastCurve}
-              icon={() => <Contrast size={16} />}
-              onClick={() => setShowContrastCurve(show => !show)}
-              style={{
-                background: showContrastCurve ? 'var(--color-background-secondary)' : 'var(--color-background)'
-              }}
-            />
+            <Box sx={{display: 'flex', alignItems: 'center', gap: 2, ml: 2}}>
+              <Text sx={{fontSize: 1, color: 'fg.muted'}}>Contrast:</Text>
+              <ContrastToggle value={contrastMode} onChange={setContrastMode} />
+            </Box>
+            <Tooltip text={showContrastCurve ? 'Hide contrast curve' : 'Show contrast curve'} direction="s">
+              <IconButton
+                aria-label={showContrastCurve ? 'Hide contrast curve' : 'Show contrast curve'}
+                aria-pressed={showContrastCurve}
+                icon={() => <ChartSpline size={16} />}
+                onClick={() => setShowContrastCurve(show => !show)}
+              />
+            </Tooltip>
           </Box>
-          <IconButton
-            aria-label={rightSidebarOpen ? 'Hide right panel' : 'Show right panel'}
-            aria-pressed={rightSidebarOpen}
-            icon={() => (rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />)}
-            onClick={() => setRightSidebarOpen(open => !open)}
-          />
+          <Tooltip text={rightSidebarOpen ? 'Hide Inspector' : 'Show Inspector'} direction="sw">
+            <IconButton
+              aria-label={rightSidebarOpen ? 'Hide Inspector' : 'Show Inspector'}
+              icon={() => (rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />)}
+              onClick={() => setRightSidebarOpen(open => !open)}
+            />
+          </Tooltip>
         </Box>
         <div style={{height: 8}}></div>
         <ZStack
