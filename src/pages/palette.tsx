@@ -103,11 +103,19 @@ const Main = styled.main`
   }
 `
 
+// Which of the 3 columns (left scales list / center scale view / right fields)
+// keyboard navigation is currently on. It lives here rather than in <Scale>
+// because the left column is rendered by this component; <Scale> reads and
+// writes it through the Outlet context.
+export type ActivePanel = 'left' | 'center' | 'right' | null
+
 export type PaletteOutletContext = {
   leftSidebarOpen: boolean
   setLeftSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>
   contrastMode: ContrastMode
   setContrastMode: React.Dispatch<React.SetStateAction<ContrastMode>>
+  activePanel: ActivePanel
+  setActivePanel: React.Dispatch<React.SetStateAction<ActivePanel>>
 }
 
 export function Palette() {
@@ -116,6 +124,7 @@ export function Palette() {
   const [state, send] = useGlobalState()
   const [leftSidebarOpen, setLeftSidebarOpen] = React.useState(true)
   const [contrastMode, setContrastMode] = React.useState<ContrastMode>('selected')
+  const [activePanel, setActivePanel] = React.useState<ActivePanel>(null)
   const palette = state.context.palettes[paletteId]
 
   if (!palette) {
@@ -266,7 +275,12 @@ export function Palette() {
         </SidebarPanel>
         <Separator />
         <SidebarPanel title="Scales">
-          <VStack spacing={8}>
+          {/* Keeps activePanel in step with real focus the way the center and
+              right panels do, so reaching the list by click, by Tab or by the [
+              shortcut all mean the same thing. Scoped to the links rather than
+              to the whole sidebar so focusing e.g. the palette name input above
+              doesn't claim the panel. */}
+          <VStack spacing={8} onFocusCapture={() => setActivePanel('left')}>
             {Object.values(palette.scales).map(scale => (
               <Link
                 key={scale.id}
@@ -381,7 +395,9 @@ export function Palette() {
         </SidebarPanel>
       </div>
       <Main>
-        <Outlet context={{leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode}} />
+        <Outlet
+          context={{leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode, activePanel, setActivePanel}}
+        />
       </Main>
     </Wrapper>
   )

@@ -30,6 +30,17 @@ import {PaletteOutletContext} from './palette'
 import {Curve} from '../types'
 import {colorToHex, getColor, getColorName, getContrastScore, getNearestContrasting, getRange} from '../utils'
 
+// The left list is rendered by the parent <Palette>, so this view reaches its
+// links by id rather than by ref.
+const SCALE_LINK_ID_PREFIX = 'scale-link-'
+
+// The scale whose link currently has focus, or null if focus is elsewhere.
+function focusedScaleId() {
+  const element = document.activeElement
+  if (!(element instanceof HTMLElement) || !element.id.startsWith(SCALE_LINK_ID_PREFIX)) return null
+  return element.id.slice(SCALE_LINK_ID_PREFIX.length)
+}
+
 export function Scale() {
   const {paletteId = '', scaleId = ''} = useParams()
   const navigate = useNavigate()
@@ -44,9 +55,10 @@ export function Scale() {
   // Which color name is being edited inline (index), plus its draft text.
   const [editingName, setEditingName] = React.useState<number | null>(null)
   const [nameDraft, setNameDraft] = React.useState('')
-  // Left panel lives in the parent <Palette>; its toggle is shared via Outlet
-  // context. The right panel is local to this view.
-  const {leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode} = useOutletContext<PaletteOutletContext>()
+  // Left panel lives in the parent <Palette>; its toggle and the active-panel
+  // state are shared via Outlet context. The right panel is local to this view.
+  const {leftSidebarOpen, setLeftSidebarOpen, contrastMode, setContrastMode, activePanel, setActivePanel} =
+    useOutletContext<PaletteOutletContext>()
   const [rightSidebarOpen, setRightSidebarOpen] = React.useState(true)
   const [showContrastCurve, setShowContrastCurve] = React.useState(false)
   const [state, send] = useGlobalState()
@@ -59,10 +71,8 @@ export function Scale() {
     lightness: true
   })
 
-  // Which of the 3 columns (left scales list / center scale view / right
-  // fields) keyboard navigation is currently on, and which H/S/L curve is
-  // "active" for Tab/Shift+Tab and for re-focusing a point in the center panel.
-  const [activePanel, setActivePanel] = React.useState<'left' | 'center' | 'right' | null>(null)
+  // Which H/S/L curve is "active" for Tab/Shift+Tab and for re-focusing a point
+  // in the center panel.
   const [activeCurveType, setActiveCurveType] = React.useState<Curve['type']>('hue')
   const curveEditorRefs = React.useRef<Partial<Record<Curve['type'], CurveEditorHandle | null>>>({})
   const nameInputRef = React.useRef<HTMLInputElement>(null)
@@ -116,11 +126,13 @@ export function Scale() {
       }
 
       // Cyclic: wraps around at both ends. Shared by the left panel's plain
-      // arrows and the Alt+Arrow scale switch below.
-      function switchScale(direction: 1 | -1) {
+      // arrows and the Alt+Arrow scale switch below. `fromId` is the scale to
+      // step from: the open one by default, but the focused one for the left
+      // panel's arrows, since Tab can land on a scale other than the open one.
+      function switchScale(direction: 1 | -1, fromId: string = scaleId) {
         const ids = Object.keys(palette.scales)
         if (ids.length === 0) return
-        const currentIndex = ids.indexOf(scaleId)
+        const currentIndex = ids.indexOf(fromId)
         const nextIndex =
           ((((currentIndex === -1 ? 0 : currentIndex) + direction) % ids.length) + ids.length) % ids.length
         const nextId = ids[nextIndex]
@@ -139,9 +151,14 @@ export function Scale() {
         return
       }
 
-      if (activePanel === 'left' && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      // Keyed on focus rather than on activePanel === 'left' so the arrows work
+      // however the list was reached (click, Tab, or [), and so they stay out of
+      // the way of the left sidebar's other controls - the palette name input is
+      // in the same panel but must keep its own arrow keys.
+      const focusedId = focusedScaleId()
+      if (focusedId && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
         event.preventDefault()
-        switchScale(event.key === 'ArrowDown' ? 1 : -1)
+        switchScale(event.key === 'ArrowDown' ? 1 : -1, focusedId)
         return
       }
 
@@ -183,7 +200,10 @@ export function Scale() {
     if (!scale) return
 
     if (activePanel === 'left') {
-      document.getElementById(`scale-link-${scaleId}`)?.focus()
+      // Unless the list already has focus: clicking or tabbing to a scale is
+      // what activates this panel in the first place, and focusing the current
+      // scale here would yank focus off the one that was just reached.
+      if (!focusedScaleId()) document.getElementById(`${SCALE_LINK_ID_PREFIX}${scaleId}`)?.focus()
     } else if (activePanel === 'center') {
       const visibleTypes = (['hue', 'saturation', 'lightness'] as const).filter(type => visibleCurves[type])
       const type = visibleTypes.includes(activeCurveType) ? activeCurveType : visibleTypes[0]
