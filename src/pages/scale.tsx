@@ -1,6 +1,8 @@
 import {
   Check,
   Contrast,
+  Lock,
+  LockOpen,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -33,6 +35,12 @@ export function Scale() {
   const navigate = useNavigate()
   const [selectedIndex, setIndex] = React.useState('0')
   const [activeSeam, setActiveSeam] = React.useState<number | null>(null)
+  // Which swatch is under the pointer, so the lock button can reveal itself
+  // on hover. Driven from JS state rather than a CSS :hover selector because
+  // Primer's IconButton wraps any sx we pass in a same-specificity
+  // `&[data-size=...]` rule, which ties (and can lose) against an ancestor's
+  // `:hover` selector.
+  const [hoveredColorIndex, setHoveredColorIndex] = React.useState<number | null>(null)
   // Which color name is being edited inline (index), plus its draft text.
   const [editingName, setEditingName] = React.useState<number | null>(null)
   const [nameDraft, setNameDraft] = React.useState('')
@@ -240,6 +248,8 @@ export function Scale() {
   // reads on the (typically light) swatches where contrast fails, while staying
   // drawn from the scale's own colors.
   const shadowColor = scaleHexes.reduce((darkest, hex) => (getLuminance(hex) < getLuminance(darkest) ? hex : darkest))
+  // Locked colors can still have their curve points selected, but not moved.
+  const lockedIndices = scale.colors.map(color => Boolean(color.locked))
 
   return (
     <div
@@ -335,11 +345,14 @@ export function Scale() {
               const hex = colorToHex(color)
               const contrast = contrastReference ? getContrast(hex, contrastReference) : undefined
               const contrastScore = contrast ? getContrastScore(contrast) : undefined
+              const isLocked = Boolean(scale.colors[i].locked)
               return (
                 <Box
                   key={i}
                   tabIndex={0}
                   onFocus={() => setIndex(String(i))}
+                  onMouseEnter={() => setHoveredColorIndex(i)}
+                  onMouseLeave={() => setHoveredColorIndex(current => (current === i ? null : current))}
                   sx={{
                     outline: 'none',
                     width: '100%',
@@ -376,8 +389,10 @@ export function Scale() {
                       top: '-26px',
                       left: 0,
                       right: 0,
-                      display: 'grid',
-                      placeItems: 'center',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '2px',
                       // Clicking anywhere in the strip except the text just selects
                       // the color (the click bubbles to the swatch's onClick).
                       cursor: 'pointer',
@@ -450,6 +465,45 @@ export function Scale() {
                         {getColorName(scale.colors, i)}
                       </Box>
                     )}
+                    {/* A plain unstyled button (not Primer's IconButton) so its
+                        size is fully under our control and it fits inside this
+                        row without growing past it into the selection bar
+                        below - if it did, the swatch would swallow clicks
+                        meant for the button. */}
+                    <Box
+                      as="button"
+                      type="button"
+                      aria-label={
+                        isLocked ? `Unlock ${getColorName(scale.colors, i)}` : `Lock ${getColorName(scale.colors, i)}`
+                      }
+                      aria-pressed={isLocked}
+                      onClick={event => {
+                        event.stopPropagation()
+                        send({type: 'TOGGLE_COLOR_LOCK', paletteId, scaleId, index: i})
+                      }}
+                      sx={{
+                        all: 'unset',
+                        display: 'grid',
+                        placeItems: 'center',
+                        flexShrink: 0,
+                        width: 16,
+                        height: 16,
+                        borderRadius: 2,
+                        color: 'var(--color-text)',
+                        cursor: 'pointer',
+                        opacity: isLocked || hoveredColorIndex === i ? 1 : 0,
+                        transition: 'opacity 120ms ease',
+                        '@media (prefers-reduced-motion: reduce)': {transition: 'none'},
+                        '&:hover': {backgroundColor: 'var(--color-background-secondary)'},
+                        '&:focus-visible': {
+                          opacity: 1,
+                          outline: '2px solid var(--color-accent-emphasis, #0969da)',
+                          outlineOffset: '1px'
+                        }
+                      }}
+                    >
+                      {isLocked ? <Lock size={12} /> : <LockOpen size={12} />}
+                    </Box>
                   </Box>
                   <Box
                     display="flex"
@@ -526,6 +580,7 @@ export function Scale() {
                   ref={handle => (curveEditorRefs.current[type] = handle)}
                   values={scale.colors.map((color, index) => getColor(palette.curves, scale, index)[type])}
                   {...getRange(type)}
+                  lockedIndices={lockedIndices}
                   label={`${type[0].toUpperCase()}`}
                   onFocus={index => {
                     setIndex(String(index))

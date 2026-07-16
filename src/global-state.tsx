@@ -94,6 +94,12 @@ type MachineEvent =
       name: string
     }
   | {
+      type: 'TOGGLE_COLOR_LOCK'
+      paletteId: string
+      scaleId: string
+      index: number
+    }
+  | {
       type: 'CREATE_CURVE_FROM_SCALE'
       paletteId: string
       scaleId: string
@@ -363,6 +369,13 @@ const machine = Machine<MachineContext, MachineEvent>({
       actions: assign((context, event) => {
         const color = context.palettes[event.paletteId].scales[event.scaleId].colors[event.index]
         if (color) color.name = event.name
+      })
+    },
+    TOGGLE_COLOR_LOCK: {
+      target: 'debouncing',
+      actions: assign((context, event) => {
+        const color = context.palettes[event.paletteId].scales[event.scaleId].colors[event.index]
+        if (color) color.locked = !color.locked
       })
     },
     CREATE_CURVE_FROM_SCALE: {

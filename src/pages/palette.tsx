@@ -111,7 +111,7 @@ export type PaletteOutletContext = {
 }
 
 export function Palette() {
-  const {paletteId = ''} = useParams()
+  const {paletteId = '', scaleId} = useParams()
   const navigate = useNavigate()
   const [state, send] = useGlobalState()
   const [leftSidebarOpen, setLeftSidebarOpen] = React.useState(true)
@@ -273,9 +273,13 @@ export function Palette() {
                 id={`scale-link-${scale.id}`}
                 to={`scale/${scale.id}`}
                 style={{
+                  display: 'block',
                   color: 'inherit',
                   fontSize: 14,
-                  textDecoration: 'none'
+                  textDecoration: 'none',
+                  padding: 4,
+                  borderRadius: 6,
+                  backgroundColor: scale.id === scaleId ? 'var(--color-background-secondary)' : 'transparent'
                 }}
               >
                 <VStack spacing={4}>

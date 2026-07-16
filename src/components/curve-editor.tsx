@@ -19,6 +19,9 @@ type CurveEditorProps = {
   onFocus?: (index: number) => void
   onBlur?: () => void
   disabled?: boolean
+  // Per-point lock: a locked point can still be focused/selected, but not
+  // dragged or nudged with the keyboard, and renders its handle gray.
+  lockedIndices?: boolean[]
   label?: string
   style?: React.SVGAttributes<SVGSVGElement>['style']
 }
@@ -31,7 +34,19 @@ export type CurveEditorHandle = {
 // TODO: snap to guides
 // TODO: label
 export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>(function CurveEditor(
-  {values, min, max, onChange, onFocus, onBlur, step = 0.1, disabled = false, label = '', style = {}},
+  {
+    values,
+    min,
+    max,
+    onChange,
+    onFocus,
+    onBlur,
+    step = 0.1,
+    disabled = false,
+    lockedIndices = [],
+    label = '',
+    style = {}
+  },
   handleRef
 ) {
   const [ref, {width, height}] = useMeasure()
@@ -113,7 +128,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
               values.map(value => round(value + clampedDelta, step)),
               event.shiftKey
             )
-          } else if (typeof focused === 'number') {
+          } else if (typeof focused === 'number' && !lockedIndices[focused]) {
             onChange?.(
               produce(values, draft => {
                 const value = guard(min, max, yScale.invert(points[focused].y) + (delta || 0))
@@ -219,116 +234,120 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
         </Box>
       </DraggableCore>
 
-      {points.map(({x, y}, index) => (
-        <DraggableCore
-          key={index}
-          disabled={disabled}
-          onStart={() => setDragging(index)}
-          onStop={() => setDragging(false)}
-          onDrag={(event, data) => {
-            onChange?.(
-              produce(values, draft => {
-                const value = guard(min, max, yScale.invert(y + data.deltaY))
-                draft[index] = round(value, step)
-              }),
-              event.shiftKey,
-              index
-            )
-          }}
-        >
-          <Box
-            as="g"
-            ref={el => (pointRefs.current[index] = el)}
-            pointerEvents={disabled ? 'none' : 'all'}
-            sx={{
-              '& .target': {
-                opacity: dragging === index ? 1 : 0
-              },
-              '&:hover .target': {
-                opacity: 1
-              },
-              '&:focus': {
-                outline: 'none'
-              }
+      {points.map(({x, y}, index) => {
+        const locked = Boolean(lockedIndices[index])
+
+        return (
+          <DraggableCore
+            key={index}
+            disabled={disabled || locked}
+            onStart={() => setDragging(index)}
+            onStop={() => setDragging(false)}
+            onDrag={(event, data) => {
+              onChange?.(
+                produce(values, draft => {
+                  const value = guard(min, max, yScale.invert(y + data.deltaY))
+                  draft[index] = round(value, step)
+                }),
+                event.shiftKey,
+                index
+              )
             }}
-            onFocus={() => {
-              setFocused(index)
-              onFocus?.(index)
-            }}
-            onBlur={() => {
-              setFocused(false)
-              onBlur?.()
-            }}
-            tabIndex={disabled ? undefined : 0}
           >
-            <circle
-              className="target"
-              cx={x}
-              cy={y}
-              r={nodeRadius}
-              fill="rgba(0,0,0,0.1)"
-              style={{transformOrigin: `${x}px ${y}px`}}
-            />
-            {!disabled ? (
-              <>
-                <circle
-                  className="border"
-                  cx={x}
-                  cy={y}
-                  r={focused === index || focused === 'line' ? 10.5 : 8.5}
-                  fill="none"
-                  stroke="rgba(0,0,0,0.2)"
-                  strokeWidth="1"
-                />
-                <circle
-                  className="handle"
-                  cx={x}
-                  cy={y}
-                  r={focused === index || focused === 'line' ? 10 : 8}
-                  fill={'white'}
-                />
-                {focused === index || focused === 'line' ? (
-                  <Box
-                    as="circle"
-                    className="focus-ring"
+            <Box
+              as="g"
+              ref={el => (pointRefs.current[index] = el)}
+              pointerEvents={disabled ? 'none' : 'all'}
+              sx={{
+                '& .target': {
+                  opacity: dragging === index ? 1 : 0
+                },
+                '&:hover .target': {
+                  opacity: 1
+                },
+                '&:focus': {
+                  outline: 'none'
+                }
+              }}
+              onFocus={() => {
+                setFocused(index)
+                onFocus?.(index)
+              }}
+              onBlur={() => {
+                setFocused(false)
+                onBlur?.()
+              }}
+              tabIndex={disabled ? undefined : 0}
+            >
+              <circle
+                className="target"
+                cx={x}
+                cy={y}
+                r={nodeRadius}
+                fill="rgba(0,0,0,0.1)"
+                style={{transformOrigin: `${x}px ${y}px`}}
+              />
+              {!disabled ? (
+                <>
+                  <circle
+                    className="border"
                     cx={x}
                     cy={y}
-                    r={7}
+                    r={focused === index || focused === 'line' ? 10.5 : 8.5}
                     fill="none"
-                    strokeWidth="2"
-                    sx={{
-                      stroke: (theme: any) => theme.colors.accent.emphasis
-                    }}
+                    stroke="rgba(0,0,0,0.2)"
+                    strokeWidth="1"
                   />
-                ) : null}
-              </>
-            ) : (
-              <circle className="node-handle" cx={x} cy={y} r={4} fill="white" />
-            )}
+                  <circle
+                    className="handle"
+                    cx={x}
+                    cy={y}
+                    r={focused === index || focused === 'line' ? 10 : 8}
+                    fill={locked ? 'var(--color-border, #8c8c8c)' : 'white'}
+                  />
+                  {focused === index || focused === 'line' ? (
+                    <Box
+                      as="circle"
+                      className="focus-ring"
+                      cx={x}
+                      cy={y}
+                      r={7}
+                      fill="none"
+                      strokeWidth="2"
+                      sx={{
+                        stroke: (theme: any) => theme.colors.accent.emphasis
+                      }}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <circle className="node-handle" cx={x} cy={y} r={4} fill="white" />
+              )}
 
-            {index === 0 ? (
-              // Pinned to the left gutter (x < 0, rendered via the svg's
-              // overflow: visible) so it stays put and readable regardless of
-              // column width. y still tracks this curve's first point.
-              <text
-                x={-8}
-                y={y}
-                fill="currentColor"
-                style={{
-                  textTransform: 'uppercase',
-                  fontFamily: 'system-ui, sans-serif',
-                  fontSize: 14,
-                  lineHeight: 1
-                }}
-                textAnchor="end"
-                alignmentBaseline="middle"
-              >
-                {label}
-              </text>
-            ) : null}
-          </Box>
-        </DraggableCore>
-      ))}
+              {index === 0 ? (
+                // Pinned to the left gutter (x < 0, rendered via the svg's
+                // overflow: visible) so it stays put and readable regardless of
+                // column width. y still tracks this curve's first point.
+                <text
+                  x={-8}
+                  y={y}
+                  fill="currentColor"
+                  style={{
+                    textTransform: 'uppercase',
+                    fontFamily: 'system-ui, sans-serif',
+                    fontSize: 14,
+                    lineHeight: 1
+                  }}
+                  textAnchor="end"
+                  alignmentBaseline="middle"
+                >
+                  {label}
+                </text>
+              ) : null}
+            </Box>
+          </DraggableCore>
+        )
+      })}
     </svg>
   )
 })
