@@ -1,23 +1,13 @@
 import {assign} from '@xstate/immer'
 import {useInterpret, useService} from '@xstate/react'
-import bezier from 'bezier-easing'
 import {isArray, keyBy} from 'lodash-es'
 import React from 'react'
 import {v4 as uniqueId} from 'uuid'
 import {interpret, Interpreter, Machine, TypegenDisabled} from 'xstate'
 import cssColorNames from './css-color-names.json'
 import exampleScales from './example-scales.json'
-import {Color, Curve, Palette, Scale} from './types'
-import {
-  clamp,
-  getColor,
-  getColorName,
-  getRange,
-  hexToColor,
-  predictColorName,
-  randomIntegerInRange,
-  lerp
-} from './utils'
+import {Channel, Color, Palette, Scale} from './types'
+import {clamp, getColorName, getRange, hexToColor, predictColorName, randomIntegerInRange} from './utils'
 
 const GLOBAL_STATE_KEY = 'global_state'
 
@@ -100,53 +90,10 @@ type MachineEvent =
       index: number
     }
   | {
-      type: 'CREATE_CURVE_FROM_SCALE'
-      paletteId: string
-      scaleId: string
-      curveType: Curve['type']
-    }
-  | {
-      type: 'CHANGE_CURVE_NAME'
-      paletteId: string
-      curveId: string
-      name: string
-    }
-  | {
-      type: 'DELETE_CURVE'
-      paletteId: string
-      curveId: string
-    }
-  | {
-      type: 'CHANGE_SCALE_CURVE'
-      paletteId: string
-      scaleId: string
-      curveType: Curve['type']
-      curveId: string
-    }
-  | {
-      type: 'CHANGE_CURVE_VALUE'
-      paletteId: string
-      curveId: string
-      index: number
-      value: number
-    }
-  | {
-      type: 'CHANGE_CURVE_VALUES'
-      paletteId: string
-      curveId: string
-      values: number[]
-    }
-  | {
       type: 'CHANGE_SCALE_COLORS'
       paletteId: string
       scaleId: string
       colors: Color[]
-    }
-  | {
-      type: 'APPLY_EASING_FUNCTION'
-      paletteId: string
-      curveId: string
-      easingFunction: bezier.EasingFunction
     }
   | {type: 'UNDO'}
   | {type: 'REDO'}
@@ -195,16 +142,14 @@ const machine = Machine<MachineContext, MachineEvent>({
           return {
             id,
             name,
-            colors: scaleArray.map((hex, index) => ({...hexToColor(hex), name: getColorName([], index)})),
-            curves: {}
+            colors: scaleArray.map((hex, index) => ({...hexToColor(hex), name: getColorName([], index)}))
           }
         })
         context.palettes[paletteId] = {
           id: paletteId,
           name: 'Untitled',
           backgroundColor: '#ffffff',
-          scales: keyBy(scales, 'id'),
-          curves: {}
+          scales: keyBy(scales, 'id')
         }
       })
     },
@@ -247,8 +192,7 @@ const machine = Machine<MachineContext, MachineEvent>({
         context.palettes[event.paletteId].scales[scaleId] = {
           id: scaleId,
           name,
-          colors: [color],
-          curves: {}
+          colors: [color]
         }
       })
     },
@@ -267,21 +211,16 @@ const machine = Machine<MachineContext, MachineEvent>({
     INSERT_COLOR: {
       target: 'debouncing',
       actions: assign((context, event) => {
-        const palette = context.palettes[event.paletteId]
-        const scale = palette.scales[event.scaleId]
-        const colors = scale.colors
+        const colors = context.palettes[event.paletteId].scales[event.scaleId].colors
         const n = colors.length
 
         if (n === 0) return
 
-        // Where the new value lands in a channel/curve array: the midpoint of
-        // the two neighbours when inserting between swatches, or the trend
-        // extrapolated one step past the edge when inserting at the start/end.
-        // `len` is the color count, not the array length: a linked curve's
-        // `values` may have a stale tail (POP/DELETE_COLOR don't trim curves),
-        // so sampling base and curve against the same `len` keeps them on the
-        // same branch and aligned by index.
-        const sample = (values: number[], at: number, len: number): number => {
+        // Where the new value lands in a channel: the midpoint of the two
+        // neighbours when inserting between swatches, or the trend extrapolated
+        // one step past the edge when inserting at the start/end.
+        const sample = (values: number[], at: number): number => {
+          const len = values.length
           if (at > 0 && at < len) {
             return (values[at - 1] + values[at]) / 2
           }
@@ -303,46 +242,15 @@ const machine = Machine<MachineContext, MachineEvent>({
         for (const channel of ['hue', 'saturation', 'lightness'] as const) {
           const {min, max} = getRange(channel)
 
-          // The base offset follows the ramp of the other base offsets…
+          // The new color follows the ramp of its neighbours.
           newColor[channel] = clamp(
             sample(
               colors.map(color => color[channel]),
-              at,
-              n
+              at
             ),
             min,
             max
           )
-
-          // …and if a curve drives this channel, splice a matching value into
-          // it at the same index so the curve stays aligned by position. Since
-          // base + curve are combined linearly, sampling each independently
-          // keeps the computed color on the progression.
-          const curveId = scale.curves[channel]
-          const curve = curveId ? palette.curves[curveId] : undefined
-          if (curve && curveId) {
-            const value = clamp(sample(curve.values, at, n), min, max)
-
-            // If the curve is linked to more than one scale, splicing it in
-            // place would shift every other scale's indices and corrupt their
-            // colors. Fork it for this scale instead.
-            const shared = Object.values(palette.scales).filter(other => other.curves[channel] === curveId).length > 1
-
-            if (shared) {
-              const forkedId = uniqueId()
-              const forkedValues = curve.values.slice()
-              forkedValues.splice(at, 0, value)
-              palette.curves[forkedId] = {
-                id: forkedId,
-                name: curve.name,
-                type: curve.type,
-                values: forkedValues
-              }
-              scale.curves[channel] = forkedId
-            } else {
-              curve.values.splice(at, 0, value)
-            }
-          }
         }
 
         colors.splice(at, 0, newColor)
@@ -378,121 +286,10 @@ const machine = Machine<MachineContext, MachineEvent>({
         if (color) color.locked = !color.locked
       })
     },
-    CREATE_CURVE_FROM_SCALE: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        // Create curve
-        const curveId = uniqueId()
-        const palette = context.palettes[event.paletteId]
-        const scale = palette.scales[event.scaleId]
-        const values = scale.colors
-          .map((_, index) => getColor(palette.curves, scale, index))
-          .map(color => color[event.curveType])
-
-        context.palettes[event.paletteId].curves[curveId] = {
-          id: curveId,
-          name: `${scale.name} ${event.curveType}`,
-          type: event.curveType,
-          values
-        }
-
-        // Add curve id to scale
-        context.palettes[event.paletteId].scales[event.scaleId].curves[event.curveType] = curveId
-
-        // Reset color offsets
-        context.palettes[event.paletteId].scales[event.scaleId].colors = scale.colors.map(color => ({
-          ...color,
-          [event.curveType]: 0
-        }))
-      })
-    },
-    CHANGE_CURVE_NAME: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        context.palettes[event.paletteId].curves[event.curveId].name = event.name
-      })
-    },
-    DELETE_CURVE: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        // Find and remove references to curve
-        Object.values(context.palettes[event.paletteId].scales).forEach(scale => {
-          ;(Object.entries(scale.curves) as [Curve['type'], string | undefined][]).forEach(([type, curveId]) => {
-            if (curveId === event.curveId) {
-              // Update color values
-              scale.colors = scale.colors.map((color, index) => ({
-                ...color,
-                [type]: context.palettes[event.paletteId].curves[curveId].values[index] + color[type]
-              }))
-
-              // Delete curve from scale
-              delete scale.curves[type]
-            }
-          })
-        })
-
-        // Delete curve
-        delete context.palettes[event.paletteId].curves[event.curveId]
-      })
-    },
-    CHANGE_SCALE_CURVE: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        const palette = context.palettes[event.paletteId]
-        const scale = palette.scales[event.scaleId]
-
-        // Update color values
-        if (event.curveId) {
-          scale.colors = scale.colors.map((color, index) => ({
-            ...color,
-            [event.curveType]: 0
-          }))
-
-          scale.curves[event.curveType] = event.curveId
-        } else {
-          scale.colors = scale.colors.map((color, index) => ({
-            ...color,
-            [event.curveType]: getColor(palette.curves, scale, index)[event.curveType]
-          }))
-
-          delete scale.curves[event.curveType]
-        }
-      })
-    },
-    CHANGE_CURVE_VALUE: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        context.palettes[event.paletteId].curves[event.curveId].values[event.index] = event.value
-      })
-    },
-    CHANGE_CURVE_VALUES: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        context.palettes[event.paletteId].curves[event.curveId].values = event.values
-      })
-    },
     CHANGE_SCALE_COLORS: {
       target: 'debouncing',
       actions: assign((context, event) => {
         context.palettes[event.paletteId].scales[event.scaleId].colors = event.colors
-      })
-    },
-    APPLY_EASING_FUNCTION: {
-      target: 'debouncing',
-      actions: assign((context, event) => {
-        const {paletteId, curveId, easingFunction} = event
-        const curve = context.palettes[paletteId].curves[curveId]
-
-        const startingPoint = curve.values[0]
-        const endingPoint = curve.values[curve.values.length - 1]
-
-        if (startingPoint == null || endingPoint == null) return
-
-        curve.values = curve.values.map((_, index) => {
-          const t = index / (curve.values.length - 1)
-          const newValue = lerp(startingPoint, endingPoint, easingFunction(t))
-          return Math.round(newValue * 10) / 10
-        })
       })
     }
   },
@@ -541,9 +338,53 @@ export function useGlobalState() {
   return useService(React.useContext(GlobalStateContext))
 }
 
+// The persisted shape from before linked curves were removed: a palette held
+// shared curves, a scale pointed a channel at one by id, and the scale's own
+// color values were offsets added on top of it.
+type LegacyScale = Scale & {curves?: Partial<Record<Channel, string>>}
+type LegacyPalette = Omit<Palette, 'scales'> & {
+  scales: Record<string, LegacyScale>
+  curves?: Record<string, {values: number[]}>
+}
+
+// Folds each linked curve back into the colors it drove, which is the same sum
+// the app used to render, so a migrated palette looks exactly as it did. Without
+// this a linked scale would come back as its bare offsets — a lightness of 0
+// reading as black. Deletable once no one's localStorage predates the removal.
+function foldLegacyCurvesIntoColors(palettes: Record<string, LegacyPalette>) {
+  for (const palette of Object.values(palettes)) {
+    for (const scale of Object.values(palette.scales)) {
+      const links = Object.entries(scale.curves ?? {}) as [Channel, string | undefined][]
+
+      for (const [channel, curveId] of links) {
+        const values = curveId ? palette.curves?.[curveId]?.values : undefined
+        if (!values) continue
+
+        scale.colors = scale.colors.map((color, index) => ({
+          ...color,
+          [channel]: color[channel] + (values[index] ?? 0)
+        }))
+      }
+
+      delete scale.curves
+    }
+
+    delete palette.curves
+  }
+}
+
 function getPersistedState(): typeof machine.initialState | null {
   try {
-    return JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY) ?? '')
+    const state = JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY) ?? '')
+    const {palettes, past = [], future = []} = state?.context ?? {}
+
+    // The undo stacks hold whole palette snapshots, so they need folding too —
+    // otherwise stepping back lands on a palette the app can no longer read.
+    for (const snapshot of [palettes, ...past, ...future]) {
+      if (snapshot) foldLegacyCurvesIntoColors(snapshot)
+    }
+
+    return state
   } catch (e) {
     return null
   }

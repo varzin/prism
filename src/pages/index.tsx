@@ -6,7 +6,7 @@ import {v4 as uniqueId} from 'uuid'
 import {icon16, IconButton} from '../components/button'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
-import {colorToHex, getColor} from '../utils'
+import {colorToHex} from '../utils'
 
 export function Index() {
   const [state, send] = useGlobalState()
@@ -110,8 +110,7 @@ export function Index() {
                         }}
                         key={scale.id}
                       >
-                        {scale.colors.map((_, index) => {
-                          const color = getColor(palette.curves, scale, index)
+                        {scale.colors.map((color, index) => {
                           return (
                             <Box
                               key={index}

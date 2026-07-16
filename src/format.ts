@@ -1,6 +1,6 @@
 import {v4 as uniqueId} from 'uuid'
 import {Color, Palette, Scale} from './types'
-import {colorToHex, getColor, getColorName, hexToColor} from './utils'
+import {colorToHex, getColorName, hexToColor} from './utils'
 
 // localStorage key for the user's custom import/export format template.
 export const FORMAT_TEMPLATE_KEY = 'export_format_template'
@@ -145,9 +145,9 @@ export function serialize(palette: Palette, template: string): string {
 
   for (const scale of Object.values(palette.scales)) {
     const steps: {[step: string]: Json} = {}
-    scale.colors.forEach((_, index) => {
+    scale.colors.forEach((color, index) => {
       const stepName = getColorName(scale.colors, index)
-      const hex = colorToHex(getColor(palette.curves, scale, index))
+      const hex = colorToHex(color)
       steps[stepName] = buildLeaf(compiled, hex)
     })
     output[scale.name] = steps
@@ -222,7 +222,7 @@ export function deserialize(jsonText: string, template: string): Scale[] {
       throw new Error(`Scale "${scaleName}": needs at least one step.`)
     }
 
-    scales.push({id: uniqueId(), name: scaleName, colors, curves: {}})
+    scales.push({id: uniqueId(), name: scaleName, colors})
   }
 
   if (scales.length === 0) {
@@ -237,12 +237,10 @@ const SAMPLE_PALETTE: Palette = {
   id: 'preview',
   name: 'sample',
   backgroundColor: '#ffffff',
-  curves: {},
   scales: {
     neutral: {
       id: 'neutral',
       name: 'neutral',
-      curves: {},
       colors: [
         {...hexToColor('#F7F9FA'), name: '50'},
         {...hexToColor('#EBEEF0'), name: '100'}
@@ -251,7 +249,6 @@ const SAMPLE_PALETTE: Palette = {
     raspberry: {
       id: 'raspberry',
       name: 'raspberry',
-      curves: {},
       colors: [{...hexToColor('#FFF6F5'), name: '50'}]
     }
   }

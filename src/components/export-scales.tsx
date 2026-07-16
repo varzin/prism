@@ -8,7 +8,7 @@ import React from 'react'
 import {useFormatTemplate} from '../format-context'
 import {serialize, slugifyFilename} from '../format'
 import {Palette} from '../types'
-import {colorToHex, getColor, getColorName} from '../utils'
+import {colorToHex, getColorName} from '../utils'
 import {Button} from './button'
 import {VStack} from './stack'
 
@@ -44,13 +44,13 @@ export function ExportScales({palette}: ExportScalesProps) {
           key = `${camelCase(scale.name)}${i}`
         }
 
-        acc[key] = scale.colors.map((_, index) => ({
+        acc[key] = scale.colors.map((color, index) => ({
           name: getColorName(scale.colors, index),
-          value: colorToHex(getColor(palette.curves, scale, index))
+          value: colorToHex(color)
         }))
         return acc
       }, {}),
-    [palette.curves, palette.scales]
+    [palette.scales]
   )
 
   const svg = React.useMemo(() => generateSvg(namedScales), [namedScales])

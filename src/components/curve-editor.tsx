@@ -5,7 +5,7 @@ import produce from 'immer'
 import React from 'react'
 import {DraggableCore} from 'react-draggable'
 import useMeasure from 'react-use-measure'
-import {falloffWeight} from '../easings'
+import {falloffWeight} from '../falloff'
 
 function round(num: number, step: number) {
   return Math.round(num * (1 / step)) / (1 / step)
@@ -46,10 +46,7 @@ type CurveEditorProps = {
   min: number
   max: number
   step?: number
-  // `editLinkedCurve` asks the host to write the scale's linked curve instead of
-  // its colors. Shift+drag sets it; the keyboard never does, having spent Shift
-  // on the large nudge (see NUDGE_LARGE).
-  onChange?: (values: number[], editLinkedCurve: boolean, index?: number) => void
+  onChange?: (values: number[], index?: number) => void
   onFocus?: (index: number) => void
   onBlur?: () => void
   disabled?: boolean
@@ -216,9 +213,6 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
         }
 
         if (direction) {
-          // Shift is the large nudge here, so it cannot also mean "write the
-          // linked curve" the way it does on a drag: the keyboard passes that
-          // flag false and leaves linked curves to the mouse.
           const delta = direction * (event.shiftKey ? NUDGE_LARGE : NUDGE)
 
           if (focused === 'line') {
@@ -234,10 +228,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
               return acc
             }, delta)
 
-            onChange?.(
-              values.map(value => round(value + clampedDelta, step)),
-              false
-            )
+            onChange?.(values.map(value => round(value + clampedDelta, step)))
           } else if (typeof focused === 'number' && !lockedIndices[focused]) {
             onChange?.(
               produce(values, draft => {
@@ -249,7 +240,6 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
                 // neighbors in step with a point that clamped at min or max.
                 spread(draft, [...values], focused, draft[focused] - values[focused])
               }),
-              false,
               focused
             )
           }
@@ -275,7 +265,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
         disabled={disabled}
         onStart={() => setDragging('line')}
         onStop={() => setDragging(false)}
-        onDrag={(event, data) => {
+        onDrag={(_, data) => {
           const delta = yScale.invert(points[0].y + data.deltaY) - yScale.invert(points[0].y)
 
           const clampedDelta = values.reduce((acc, value) => {
@@ -290,10 +280,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
             return acc
           }, delta)
 
-          onChange?.(
-            values.map(value => round(value + clampedDelta, step)),
-            event.shiftKey
-          )
+          onChange?.(values.map(value => round(value + clampedDelta, step)))
         }}
       >
         <Box
@@ -377,7 +364,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
               spreadValues.current = null
               setDragging(false)
             }}
-            onDrag={(event, data) => {
+            onDrag={(_, data) => {
               onChange?.(
                 produce(values, draft => {
                   const value = guard(min, max, yScale.invert(y + data.deltaY))
@@ -387,7 +374,6 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
                   // or max the rest of the curve stops with it.
                   spread(draft, spreadValues.current ?? [...values], index, value - values[index])
                 }),
-                event.shiftKey,
                 index
               )
             }}

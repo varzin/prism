@@ -22,7 +22,7 @@ type ProportionalEditingToggleProps = {
 
 // Toggles proportional editing, and while it's on exposes its radius: how many
 // columns to each side of a dragged point follow it, with the movement easing
-// off the further out it goes (see falloffWeight in easings.ts).
+// off the further out it goes (see falloffWeight in falloff.ts).
 export function ProportionalEditingToggle({
   enabled,
   onEnabledChange,

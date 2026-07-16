@@ -1,4 +1,4 @@
-import {Color, Curve, Scale} from './types'
+import {Channel, Color} from './types'
 import hsluv from 'hsluv'
 import {getContrast, toHex} from 'color2k'
 
@@ -15,21 +15,7 @@ export function randomIntegerInRange(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-export function getColor(curves: Record<string, Curve>, scale: Scale, index: number) {
-  const color = scale.colors[index]
-
-  const hueCurve = curves[scale.curves.hue ?? '']?.values ?? []
-  const saturationCurve = curves[scale.curves.saturation ?? '']?.values ?? []
-  const lightnessCurve = curves[scale.curves.lightness ?? '']?.values ?? []
-
-  const hue = color.hue + (hueCurve[index] ?? 0)
-  const saturation = color.saturation + (saturationCurve[index] ?? 0)
-  const lightness = color.lightness + (lightnessCurve[index] ?? 0)
-
-  return {hue, saturation, lightness}
-}
-
-export function getRange(type: Curve['type']) {
+export function getRange(type: Channel) {
   const ranges = {
     hue: {min: 0, max: 360},
     saturation: {min: 0, max: 100},
@@ -120,10 +106,6 @@ export function predictColorName(names: string[], at: number): string {
   const after = parseName(names[at])
   if (before === null || after === null) return fallback
   return String(Math.round((before + after) / 2))
-}
-
-export function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t
 }
 
 export function clamp(value: number, min: number, max: number) {

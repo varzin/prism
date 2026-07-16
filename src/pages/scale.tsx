@@ -22,15 +22,14 @@ import {ContrastToggle} from '../components/contrast-toggle'
 import {CurveEditor, CurveEditorHandle} from '../components/curve-editor'
 import {Input} from '../components/input'
 import {ProportionalEditingToggle} from '../components/proportional-editing-toggle'
-import {Select} from '../components/select'
 import {Separator} from '../components/separator'
 import {SidebarPanel} from '../components/sidebar-panel'
 import {VStack, ZStack} from '../components/stack'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {PaletteOutletContext} from './palette'
-import {Curve} from '../types'
-import {colorToHex, getColor, getColorName, getContrastScore, getNearestContrasting, getRange} from '../utils'
+import {Channel} from '../types'
+import {colorToHex, getColorName, getContrastScore, getNearestContrasting, getRange} from '../utils'
 
 // The left list is rendered by the parent <Palette>, so this view reaches its
 // links by id rather than by ref.
@@ -77,13 +76,13 @@ export function Scale() {
 
   // Which H/S/L curve is "active" for Tab/Shift+Tab and for re-focusing a point
   // in the center panel.
-  const [activeCurveType, setActiveCurveType] = React.useState<Curve['type']>('hue')
+  const [activeCurveType, setActiveCurveType] = React.useState<Channel>('hue')
   // Which curve has a point in hand right now, so the other two can recede
   // behind it. Distinct from activeCurveType, which remembers the last curve
   // touched so Tab and the arrow keys have somewhere to land and therefore
   // always names one: this goes back to null the moment the point is let go.
-  const [engagedCurveType, setEngagedCurveType] = React.useState<Curve['type'] | null>(null)
-  const curveEditorRefs = React.useRef<Partial<Record<Curve['type'], CurveEditorHandle | null>>>({})
+  const [engagedCurveType, setEngagedCurveType] = React.useState<Channel | null>(null)
+  const curveEditorRefs = React.useRef<Partial<Record<Channel, CurveEditorHandle | null>>>({})
   const nameInputRef = React.useRef<HTMLInputElement>(null)
 
   // Close any open name editor when navigating between scales.
@@ -260,7 +259,7 @@ export function Scale() {
   const index = String(Math.min(Number(selectedIndex), scale.colors.length - 1))
 
   try {
-    const focusedColor = index ? getColor(palette.curves, scale, parseInt(index, 10)) : undefined
+    const focusedColor = index ? scale.colors[parseInt(index, 10)] : undefined
     focusedHex = focusedColor ? colorToHex(focusedColor) : undefined
   } catch (error) {}
 
@@ -268,7 +267,7 @@ export function Scale() {
   // color in this scale (relative), or the palette background. The stripe draws
   // this color as ink so the number and the preview stay in sync.
   const contrastReference = contrastMode === 'background' ? palette.backgroundColor : focusedHex
-  const scaleHexes = scale.colors.map((_, i) => colorToHex(getColor(palette.curves, scale, i)))
+  const scaleHexes = scale.colors.map(colorToHex)
   // Per-swatch contrast against contrastReference, plotted as a read-only curve
   // (see the contrast curve toggle button) so the shape of the contrast change across
   // the scale is visible alongside the H/S/L curves.
@@ -388,8 +387,7 @@ export function Scale() {
               borderRadius: 2
             }}
           >
-            {scale.colors.map((_, i) => {
-              const color = getColor(palette.curves, scale, i)
+            {scale.colors.map((color, i) => {
               const hex = colorToHex(color)
               const contrast = contrastReference ? getContrast(hex, contrastReference) : undefined
               const contrastScore = contrast ? getContrastScore(contrast) : undefined
@@ -601,21 +599,6 @@ export function Scale() {
               )
             })}
           </Box>
-          {(Object.entries(scale.curves) as [Curve['type'], string | undefined][])
-            .filter(([type]) => visibleCurves[type])
-            .map(([type, curveId]) => {
-              if (!curveId) return null
-
-              return (
-                <CurveEditor
-                  key={curveId}
-                  values={palette.curves[curveId].values}
-                  {...getRange(type)}
-                  disabled
-                  label={`${type[0].toUpperCase()}`}
-                />
-              )
-            })}
           {showContrastCurve ? (
             <CurveEditor key="contrast-curve" values={contrastCurveValues} min={1} max={21} disabled label="C" />
           ) : null}
@@ -626,7 +609,7 @@ export function Scale() {
                 <CurveEditor
                   key={type}
                   ref={handle => (curveEditorRefs.current[type] = handle)}
-                  values={scale.colors.map((color, index) => getColor(palette.curves, scale, index)[type])}
+                  values={scale.colors.map(color => color[type])}
                   {...getRange(type)}
                   lockedIndices={lockedIndices}
                   proportionalRadius={effectiveProportionalRadius}
@@ -638,25 +621,16 @@ export function Scale() {
                     setEngagedCurveType(type)
                   }}
                   onBlur={() => setEngagedCurveType(current => (current === type ? null : current))}
-                  onChange={(values, editLinkedCurve, index) => {
-                    if (editLinkedCurve && scale.curves[type]) {
-                      send({
-                        type: 'CHANGE_CURVE_VALUES',
-                        paletteId,
-                        curveId: scale.curves[type] ?? '',
-                        values: values.map((value, index) => value - scale.colors[index][type])
-                      })
-                    } else {
-                      send({
-                        type: 'CHANGE_SCALE_COLORS',
-                        paletteId,
-                        scaleId,
-                        colors: scale.colors.map((color, index) => ({
-                          ...color,
-                          [type]: values[index] - (palette.curves[scale.curves[type] ?? '']?.values[index] ?? 0)
-                        }))
-                      })
-                    }
+                  onChange={values => {
+                    send({
+                      type: 'CHANGE_SCALE_COLORS',
+                      paletteId,
+                      scaleId,
+                      colors: scale.colors.map((color, index) => ({
+                        ...color,
+                        [type]: values[index]
+                      }))
+                    })
                   }}
                 />
               )
@@ -816,155 +790,6 @@ export function Scale() {
                   })
                 }
               />
-            </VStack>
-          </VStack>
-        </SidebarPanel>
-        <Separator />
-        <SidebarPanel title="Linked curves">
-          <VStack spacing={16}>
-            <VStack spacing={4}>
-              <label htmlFor="hue-curve" style={{fontSize: 14}}>
-                Hue curve
-              </label>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  gap: 8
-                }}
-              >
-                <Select
-                  key={`${scale.name}-hue-curve`}
-                  id="hue-curve"
-                  value={scale.curves.hue}
-                  onChange={event =>
-                    send({
-                      type: 'CHANGE_SCALE_CURVE',
-                      paletteId,
-                      scaleId,
-                      curveType: 'hue',
-                      curveId: event.target.value
-                    })
-                  }
-                >
-                  <option value="">None</option>
-                  {Object.values(palette.curves)
-                    .filter(curve => curve.type === 'hue')
-                    .map(curve => (
-                      <option key={curve.id} value={curve.id}>
-                        {curve.name}
-                      </option>
-                    ))}
-                </Select>
-                <IconButton
-                  aria-label="Create hue curve"
-                  icon={icon16(Plus)}
-                  onClick={() =>
-                    send({
-                      type: 'CREATE_CURVE_FROM_SCALE',
-                      paletteId,
-                      scaleId,
-                      curveType: 'hue'
-                    })
-                  }
-                />
-              </div>
-            </VStack>
-            <VStack spacing={4}>
-              <label htmlFor="saturation-curve" style={{fontSize: 14}}>
-                Saturation curve
-              </label>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  gap: 8
-                }}
-              >
-                <Select
-                  key={`${scale.name}-saturation-curve`}
-                  id="saturation-curve"
-                  value={scale.curves.saturation}
-                  onChange={event =>
-                    send({
-                      type: 'CHANGE_SCALE_CURVE',
-                      paletteId,
-                      scaleId,
-                      curveType: 'saturation',
-                      curveId: event.target.value
-                    })
-                  }
-                >
-                  <option value="">None</option>
-                  {Object.values(palette.curves)
-                    .filter(curve => curve.type === 'saturation')
-                    .map(curve => (
-                      <option key={curve.id} value={curve.id}>
-                        {curve.name}
-                      </option>
-                    ))}
-                </Select>
-                <IconButton
-                  icon={icon16(Plus)}
-                  aria-label="Create saturation curve"
-                  onClick={() =>
-                    send({
-                      type: 'CREATE_CURVE_FROM_SCALE',
-                      paletteId,
-                      scaleId,
-                      curveType: 'saturation'
-                    })
-                  }
-                />
-              </div>
-            </VStack>
-            <VStack spacing={4}>
-              <label htmlFor="lightness-curve" style={{fontSize: 14}}>
-                Lightness curve
-              </label>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  gap: 8
-                }}
-              >
-                <Select
-                  key={`${scale.name}-lightness-curve`}
-                  id="lightness-curve"
-                  value={scale.curves.lightness}
-                  onChange={event =>
-                    send({
-                      type: 'CHANGE_SCALE_CURVE',
-                      paletteId,
-                      scaleId,
-                      curveType: 'lightness',
-                      curveId: event.target.value
-                    })
-                  }
-                >
-                  <option value="">None</option>
-                  {Object.values(palette.curves)
-                    .filter(curve => curve.type === 'lightness')
-                    .map(curve => (
-                      <option key={curve.id} value={curve.id}>
-                        {curve.name}
-                      </option>
-                    ))}
-                </Select>
-                <IconButton
-                  aria-label="Create lightness curve"
-                  icon={icon16(Plus)}
-                  onClick={() =>
-                    send({
-                      type: 'CREATE_CURVE_FROM_SCALE',
-                      paletteId,
-                      scaleId,
-                      curveType: 'lightness'
-                    })
-                  }
-                />
-              </div>
             </VStack>
           </VStack>
         </SidebarPanel>

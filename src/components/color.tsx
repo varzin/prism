@@ -3,7 +3,7 @@ import {toHsla, toRgba} from 'color2k'
 import {Trash2} from 'lucide-react'
 import React from 'react'
 import {useGlobalState} from '../global-state'
-import {colorToHex, getColor, getColorName} from '../utils'
+import {colorToHex, getColorName} from '../utils'
 import {icon16, IconButton} from './button'
 import {Input} from './input'
 import {SidebarPanel} from './sidebar-panel'
@@ -20,8 +20,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
     return null
   }
 
-  const computedColor = getColor(palette.curves, scale, indexAsNumber)
-  const hex = colorToHex(computedColor)
+  const hex = colorToHex(color)
 
   return (
     <SidebarPanel
@@ -54,7 +53,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
         >
           <VStack spacing={4}>
             <label htmlFor="hue" style={{fontSize: 14}}>
-              {scale.curves.hue ? 'H offset' : 'H'}
+              H
             </label>
             <Input
               id="hue"
@@ -78,7 +77,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
           </VStack>
           <VStack spacing={4}>
             <label htmlFor="saturation" style={{fontSize: 14}}>
-              {scale.curves.saturation ? 'S offset' : 'S'}
+              S
             </label>
             <Input
               id="saturation"
@@ -102,7 +101,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
           </VStack>
           <VStack spacing={4}>
             <label htmlFor="lightness" style={{fontSize: 14}}>
-              {scale.curves.lightness ? 'L offset' : 'L'}
+              L
             </label>
             <Input
               id="lightness"
@@ -127,7 +126,7 @@ export function Color({paletteId = '', scaleId = '', index = ''}: {paletteId: st
         </div>
 
         <Box as="code" sx={{fontFamily: 'mono', fontSize: 1}}>
-          hsluv({computedColor.hue}, {computedColor.saturation}%, {computedColor.lightness}%)
+          hsluv({color.hue}, {color.saturation}%, {color.lightness}%)
         </Box>
 
         <Box as="code" sx={{fontFamily: 'mono', fontSize: 1}}>

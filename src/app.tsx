@@ -5,7 +5,6 @@ import {BrowserRouter, Route, Routes} from 'react-router-dom'
 import {createGlobalStyle} from 'styled-components'
 import {useGlobalState} from './global-state'
 import {Index} from './pages'
-import {Curve} from './pages/curve'
 import {NotFound} from './pages/not-found'
 import {Palette} from './pages/palette'
 import {Scale} from './pages/scale'
@@ -34,7 +33,6 @@ export function App() {
           <Route path="/" element={<Index />} />
           <Route path="local/:paletteId" element={<Palette />}>
             <Route path="scale/:scaleId" element={<Scale />} />
-            <Route path="curve/:curveId" element={<Curve />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
