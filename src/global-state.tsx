@@ -6,10 +6,32 @@ import {v4 as uniqueId} from 'uuid'
 import {interpret, Interpreter, Machine, TypegenDisabled} from 'xstate'
 import cssColorNames from './css-color-names.json'
 import exampleScales from './example-scales.json'
-import {Channel, Color, Palette, Scale} from './types'
+import {applyCurve} from './easings'
+import {Channel, Color, Curve, Palette, Scale} from './types'
 import {clamp, getColorName, getRange, hexToColor, predictColorName, randomIntegerInRange} from './utils'
 
 const GLOBAL_STATE_KEY = 'global_state'
+
+// Re-derives every driven channel from its endpoints. Called after anything
+// that touches a scale's colors, so a driven channel can never be left showing
+// a shape its preset doesn't produce -- whichever way the colors moved (drag,
+// nudge, inspector field, an inserted or deleted color), the answer is the same.
+function applyCurves(scale: Scale) {
+  const links = Object.entries(scale.curves ?? {}) as [Channel, Curve | undefined][]
+
+  for (const [channel, curve] of links) {
+    if (!curve) continue
+
+    const values = applyCurve(
+      scale.colors.map(color => color[channel]),
+      curve
+    )
+
+    scale.colors.forEach((color, index) => {
+      color[channel] = values[index]
+    })
+  }
+}
 
 type MachineContext = {
   palettes: Record<string, Palette>
@@ -94,6 +116,14 @@ type MachineEvent =
       paletteId: string
       scaleId: string
       colors: Color[]
+    }
+  | {
+      type: 'CHANGE_SCALE_CURVE'
+      paletteId: string
+      scaleId: string
+      channel: Channel
+      // null detaches the curve, leaving the colors wherever it last put them.
+      curve: Curve | null
     }
   | {type: 'UNDO'}
   | {type: 'REDO'}
@@ -211,7 +241,8 @@ const machine = Machine<MachineContext, MachineEvent>({
     INSERT_COLOR: {
       target: 'debouncing',
       actions: assign((context, event) => {
-        const colors = context.palettes[event.paletteId].scales[event.scaleId].colors
+        const scale = context.palettes[event.paletteId].scales[event.scaleId]
+        const colors = scale.colors
         const n = colors.length
 
         if (n === 0) return
@@ -254,22 +285,29 @@ const machine = Machine<MachineContext, MachineEvent>({
         }
 
         colors.splice(at, 0, newColor)
+        // The inserted color shifts every later index, so a driven channel's
+        // whole ramp is re-sampled -- including when the insert lands on an end
+        // and hands the curve a new handle.
+        applyCurves(scale)
       })
     },
     DELETE_COLOR: {
       target: 'debouncing',
       actions: assign((context, event) => {
-        const colors = context.palettes[event.paletteId].scales[event.scaleId].colors
+        const scale = context.palettes[event.paletteId].scales[event.scaleId]
 
-        if (colors.length > 1) {
-          colors.splice(event.index, 1)
+        if (scale.colors.length > 1) {
+          scale.colors.splice(event.index, 1)
+          applyCurves(scale)
         }
       })
     },
     CHANGE_COLOR_VALUE: {
       target: 'debouncing',
       actions: assign((context, event) => {
-        Object.assign(context.palettes[event.paletteId].scales[event.scaleId].colors[event.index], event.value)
+        const scale = context.palettes[event.paletteId].scales[event.scaleId]
+        Object.assign(scale.colors[event.index], event.value)
+        applyCurves(scale)
       })
     },
     CHANGE_COLOR_NAME: {
@@ -289,7 +327,28 @@ const machine = Machine<MachineContext, MachineEvent>({
     CHANGE_SCALE_COLORS: {
       target: 'debouncing',
       actions: assign((context, event) => {
-        context.palettes[event.paletteId].scales[event.scaleId].colors = event.colors
+        const scale = context.palettes[event.paletteId].scales[event.scaleId]
+        scale.colors = event.colors
+        applyCurves(scale)
+      })
+    },
+    CHANGE_SCALE_CURVE: {
+      target: 'debouncing',
+      actions: assign((context, event) => {
+        const scale = context.palettes[event.paletteId].scales[event.scaleId]
+
+        if (event.curve) {
+          scale.curves = {...scale.curves, [event.channel]: event.curve}
+          // Attaching redraws the channel immediately, so the select's effect is
+          // visible without waiting for an endpoint to move -- and so does every
+          // nudge of a custom control point. This overwrites whatever the middle
+          // colors held; undo is the way back.
+          applyCurves(scale)
+        } else if (scale.curves) {
+          // Detaching leaves the colors exactly where the curve put them and
+          // just hands the middle points back.
+          delete scale.curves[event.channel]
+        }
       })
     }
   },
@@ -341,7 +400,7 @@ export function useGlobalState() {
 // The persisted shape from before linked curves were removed: a palette held
 // shared curves, a scale pointed a channel at one by id, and the scale's own
 // color values were offsets added on top of it.
-type LegacyScale = Scale & {curves?: Partial<Record<Channel, string>>}
+type LegacyScale = Omit<Scale, 'curves'> & {curves?: Partial<Record<Channel, string>>}
 type LegacyPalette = Omit<Palette, 'scales'> & {
   scales: Record<string, LegacyScale>
   curves?: Record<string, {values: number[]}>
@@ -353,6 +412,11 @@ type LegacyPalette = Omit<Palette, 'scales'> & {
 // reading as black. Deletable once no one's localStorage predates the removal.
 function foldLegacyCurvesIntoColors(palettes: Record<string, LegacyPalette>) {
   for (const palette of Object.values(palettes)) {
+    // `scale.curves` has since been reused for bezier presets, so the palette's
+    // own `curves` is what says this is legacy data. Without this guard the
+    // migration would strip every preset on load, every load.
+    if (!palette.curves) continue
+
     for (const scale of Object.values(palette.scales)) {
       const links = Object.entries(scale.curves ?? {}) as [Channel, string | undefined][]
 

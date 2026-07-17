@@ -2,6 +2,7 @@ import {Box} from '@primer/react'
 import {guard} from 'color2k'
 import {scaleLinear} from 'd3-scale'
 import produce from 'immer'
+import {Spline} from 'lucide-react'
 import React from 'react'
 import {DraggableCore} from 'react-draggable'
 import useMeasure from 'react-use-measure'
@@ -49,10 +50,19 @@ type CurveEditorProps = {
   onChange?: (values: number[], index?: number) => void
   onFocus?: (index: number) => void
   onBlur?: () => void
+  // This curve has been taken hold of, by its line or by any of its points.
+  // Unlike onFocus it names no index, and unlike onBlur it has no opposite: the
+  // host decides how long the selection outlives the focus that started it.
+  onSelect?: () => void
   disabled?: boolean
   // Per-point lock: a locked point can still be focused/selected, but not
   // dragged or nudged with the keyboard, and renders its handle gray.
   lockedIndices?: boolean[]
+  // A bezier preset drives this curve: the first and last points are the only
+  // handles, and everything between them is computed from them by the host. The
+  // computed points are immovable on the same terms as a locked one -- still
+  // selectable, so picking a swatch keeps highlighting a point on every curve.
+  driven?: boolean
   // Proportional editing: how many points to each side of the one being moved
   // follow along, their share of the movement easing off with distance. 0 (the
   // default) moves only the point itself.
@@ -79,9 +89,11 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
     onChange,
     onFocus,
     onBlur,
+    onSelect,
     step = 0.1,
     disabled = false,
     lockedIndices = [],
+    driven = false,
     proportionalRadius = 0,
     dimmed = false,
     label = '',
@@ -101,6 +113,13 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
     focusPoint: index => pointRefs.current[index]?.focus(),
     focusLine: () => lineRef.current?.focus()
   }))
+
+  // A point the user cannot move, either because its color is locked or because
+  // a preset computes it. Both read the same to the hand, so they answer as one.
+  const immovable = React.useCallback(
+    (index: number) => Boolean(lockedIndices[index]) || (driven && index !== 0 && index !== values.length - 1),
+    [lockedIndices, driven, values.length]
+  )
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const xScale = React.useCallback(
@@ -147,7 +166,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
   // pick a side and misreport it.
   const influence = React.useMemo(() => {
     const activeIndex = typeof dragging === 'number' ? dragging : typeof focused === 'number' ? focused : null
-    if (activeIndex === null || !proportionalRadius || lockedIndices[activeIndex] || values.length < 2) return null
+    if (activeIndex === null || !proportionalRadius || immovable(activeIndex) || values.length < 2) return null
 
     const stops = Array.from({length: values.length}, (_, index) => {
       const distance = Math.abs(index - activeIndex)
@@ -161,7 +180,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
     })
 
     return {x1: xScale(0), x2: xScale(values.length - 1), stops}
-  }, [dragging, focused, proportionalRadius, lockedIndices, values.length, xScale])
+  }, [dragging, focused, proportionalRadius, immovable, values.length, xScale])
 
   // Hands `delta` down from the point at `sourceIndex` to the points within the
   // proportional radius, easing it off with distance. Distance is counted in
@@ -176,13 +195,13 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
       const last = Math.min(values.length - 1, sourceIndex + proportionalRadius)
 
       for (let index = first; index <= last; index++) {
-        if (index === sourceIndex || lockedIndices[index]) continue
+        if (index === sourceIndex || immovable(index)) continue
         const weight = falloffWeight(Math.abs(index - sourceIndex), proportionalRadius)
         accumulated[index] = guard(min, max, accumulated[index] + delta * weight)
         draft[index] = round(accumulated[index], step)
       }
     },
-    [proportionalRadius, values.length, lockedIndices, min, max, step]
+    [proportionalRadius, values.length, immovable, min, max, step]
   )
 
   return (
@@ -229,7 +248,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
             }, delta)
 
             onChange?.(values.map(value => round(value + clampedDelta, step)))
-          } else if (typeof focused === 'number' && !lockedIndices[focused]) {
+          } else if (typeof focused === 'number' && !immovable(focused)) {
             onChange?.(
               produce(values, draft => {
                 const value = guard(min, max, yScale.invert(points[focused].y) + delta)
@@ -298,6 +317,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
           }}
           onFocus={() => {
             setFocused('line')
+            onSelect?.()
           }}
           onBlur={() => {
             setFocused(false)
@@ -350,12 +370,12 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
       </DraggableCore>
 
       {points.map(({x, y}, index) => {
-        const locked = Boolean(lockedIndices[index])
+        const fixed = immovable(index)
 
         return (
           <DraggableCore
             key={index}
-            disabled={disabled || locked}
+            disabled={disabled || fixed}
             onStart={() => {
               spreadValues.current = [...values]
               setDragging(index)
@@ -396,6 +416,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
               onFocus={() => {
                 setFocused(index)
                 onFocus?.(index)
+                onSelect?.()
               }}
               onBlur={() => {
                 setFocused(false)
@@ -427,7 +448,7 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
                     cx={x}
                     cy={y}
                     r={focused === index || focused === 'line' ? 10 : 8}
-                    fill={locked ? 'var(--color-border, #8c8c8c)' : 'white'}
+                    fill={fixed ? 'var(--color-border, #8c8c8c)' : 'white'}
                   />
                   {focused === index || focused === 'line' ? (
                     <Box
@@ -447,6 +468,15 @@ export const CurveEditor = React.forwardRef<CurveEditorHandle, CurveEditorProps>
               ) : (
                 <circle className="node-handle" cx={x} cy={y} r={4} fill="white" />
               )}
+
+              {index === 0 && driven ? (
+                // Sits left of the label, in the same gutter, marking this curve
+                // as preset-driven at the spot the eye already goes for "which
+                // channel is this". Nudged up by half its box to center on y.
+                <g transform={`translate(-40, ${y - 8})`} color="currentColor">
+                  <Spline size={16} />
+                </g>
+              ) : null}
 
               {index === 0 ? (
                 // Pinned to the left gutter (x < 0, rendered via the svg's

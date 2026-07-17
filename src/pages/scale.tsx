@@ -20,6 +20,7 @@ import {Button, ButtonGroup, icon16, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {ContrastToggle} from '../components/contrast-toggle'
 import {CurveEditor, CurveEditorHandle} from '../components/curve-editor'
+import {CurveSelect} from '../components/curve-select'
 import {Input} from '../components/input'
 import {ProportionalEditingToggle} from '../components/proportional-editing-toggle'
 import {Separator} from '../components/separator'
@@ -82,6 +83,11 @@ export function Scale() {
   // touched so Tab and the arrow keys have somewhere to land and therefore
   // always names one: this goes back to null the moment the point is let go.
   const [engagedCurveType, setEngagedCurveType] = React.useState<Channel | null>(null)
+  // Which curve the inspector's Curve group is reporting on. Unlike
+  // engagedCurveType it outlives the focus that set it, so reaching for the
+  // group's own select — which blurs the point — doesn't unmount it mid-click.
+  // Only taking hold of another curve moves it; null until one is touched.
+  const [selectedCurveType, setSelectedCurveType] = React.useState<Channel | null>(null)
   const curveEditorRefs = React.useRef<Partial<Record<Channel, CurveEditorHandle | null>>>({})
   const nameInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -229,6 +235,10 @@ export function Scale() {
   // panel was active (e.g. Alt+Arrow pressed with no point selected), leave
   // focus/selection alone rather than selecting something new.
   React.useEffect(() => {
+    // The new scale's curves haven't been touched yet. If focus lands on one
+    // below, its onSelect will say so.
+    setSelectedCurveType(null)
+
     if (activePanel === 'left') {
       document.getElementById(`scale-link-${scaleId}`)?.focus()
     } else if (activePanel === 'center' && scale) {
@@ -298,9 +308,10 @@ export function Scale() {
           display: 'grid',
           gridTemplateRows: 'auto auto 1fr',
           gap: 16,
-          // Extra left padding reserves a gutter for the H/S/L curve labels,
+          // Extra left padding reserves a gutter for the H/S/L curve labels and
+          // the curve icon that sits further out on a driven channel, both of
           // which overflow to the left of the swatches (see curve-editor.tsx).
-          padding: '16px 16px 16px 28px',
+          padding: '16px 16px 16px 48px',
           height: '100%'
         }}
       >
@@ -605,6 +616,8 @@ export function Scale() {
           {(['hue', 'saturation', 'lightness'] as const)
             .filter(type => visibleCurves[type])
             .map(type => {
+              const driven = Boolean(scale.curves?.[type])
+
               return (
                 <CurveEditor
                   key={type}
@@ -612,7 +625,10 @@ export function Scale() {
                   values={scale.colors.map(color => color[type])}
                   {...getRange(type)}
                   lockedIndices={lockedIndices}
-                  proportionalRadius={effectiveProportionalRadius}
+                  driven={driven}
+                  // A preset already decides every point between the ends, so
+                  // there is nothing for a falloff to hand movement to.
+                  proportionalRadius={driven ? 0 : effectiveProportionalRadius}
                   dimmed={engagedCurveType !== null && engagedCurveType !== type}
                   label={`${type[0].toUpperCase()}`}
                   onFocus={index => {
@@ -620,6 +636,7 @@ export function Scale() {
                     setActiveCurveType(type)
                     setEngagedCurveType(type)
                   }}
+                  onSelect={() => setSelectedCurveType(type)}
                   onBlur={() => setEngagedCurveType(current => (current === type ? null : current))}
                   onChange={values => {
                     send({
@@ -793,6 +810,25 @@ export function Scale() {
             </VStack>
           </VStack>
         </SidebarPanel>
+        {selectedCurveType ? (
+          <>
+            <Separator />
+            <CurveSelect
+              channel={selectedCurveType}
+              curve={scale.curves?.[selectedCurveType]}
+              sampleColors={scaleHexes}
+              onChange={curve =>
+                send({
+                  type: 'CHANGE_SCALE_CURVE',
+                  paletteId,
+                  scaleId,
+                  channel: selectedCurveType,
+                  curve
+                })
+              }
+            />
+          </>
+        ) : null}
         {index ? (
           <>
             <Separator />

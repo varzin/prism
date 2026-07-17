@@ -1,4 +1,4 @@
-import {Palette as PaletteIcon, Redo2, Undo2} from 'lucide-react'
+import {Palette as PaletteIcon, Redo2, Spline, Undo2} from 'lucide-react'
 import {Box, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
@@ -15,7 +15,29 @@ import {SidebarPanel} from '../components/sidebar-panel'
 import {HStack, VStack} from '../components/stack'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
+import {channels, Scale} from '../types'
 import {colorToHex} from '../utils'
+
+// Which of a scale's channels are driven by a preset, as the channel initials.
+// Absent entirely when none are: the row is a list of scales first, and a mark
+// that never goes away would stop being a mark.
+function CurveBadge({scale}: {scale: Scale}) {
+  const driven = channels.filter(channel => scale.curves?.[channel])
+
+  if (driven.length === 0) return null
+
+  const initials = driven.map(channel => channel[0].toUpperCase()).join('')
+
+  return (
+    <Box
+      aria-label={`Curves on ${driven.join(', ')}`}
+      sx={{display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, opacity: 0.6}}
+    >
+      <Spline size={14} />
+      <Text sx={{fontSize: 0, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em'}}>{initials}</Text>
+    </Box>
+  )
+}
 
 const Wrapper = styled.div<{backgroundColor: string; $sidebarOpen: boolean}>`
   --color-text: ${props => readableColor(props.backgroundColor)};
@@ -238,7 +260,12 @@ export function Palette() {
                 }}
               >
                 <VStack spacing={4}>
-                  <span>{scale.name}</span>
+                  <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+                    <Box as="span" sx={{flexGrow: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                      {scale.name}
+                    </Box>
+                    <CurveBadge scale={scale} />
+                  </Box>
                   <Box
                     sx={{
                       display: 'flex',
