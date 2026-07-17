@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import {Box, Text} from '@primer/react'
 import {Tooltip} from '@primer/react/drafts'
-import {getContrast, getLuminance} from 'color2k'
+import {getContrast} from 'color2k'
 import React from 'react'
 import {useLocation, useNavigate, useOutletContext, useParams} from 'react-router-dom'
 import {Button, ButtonGroup, icon16, IconButton} from '../components/button'
@@ -30,7 +30,7 @@ import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {PaletteOutletContext} from './palette'
 import {Channel, channels} from '../types'
-import {colorToHex, getColorName, getContrastScore, getNearestContrasting, getRange} from '../utils'
+import {colorToHex, getColorName, getContrastScore, getLabelInk, getNearestContrasting, getRange} from '../utils'
 
 // The left list is rendered by the parent <Palette>, so this view reaches its
 // links by id rather than by ref.
@@ -336,18 +336,14 @@ export function Scale() {
   } catch (error) {}
 
   // What each swatch's contrast score is measured against: either the selected
-  // color in this scale (relative), or the palette background. The stripe draws
-  // this color as ink so the number and the preview stay in sync.
+  // color in this scale (relative), or the palette background. Only the mark's
+  // disc draws it — see the label ink below.
   const contrastReference = contrastMode === 'background' ? palette.backgroundColor : focusedHex
   const scaleHexes = scale.colors.map(colorToHex)
   // Per-swatch contrast against contrastReference, plotted as a read-only curve
   // (see the contrast curve toggle button) so the shape of the contrast change across
   // the scale is visible alongside the H/S/L curves.
   const contrastCurveValues = scaleHexes.map(hex => (contrastReference ? getContrast(hex, contrastReference) : 1))
-  // The darkest color in the scale, used as the label halo / failing mark so it
-  // reads on the (typically light) swatches where contrast fails, while staying
-  // drawn from the scale's own colors.
-  const shadowColor = scaleHexes.reduce((darkest, hex) => (getLuminance(hex) < getLuminance(darkest) ? hex : darkest))
   // Locked colors can still have their curve points selected, but not moved.
   const lockedIndices = scale.colors.map(color => Boolean(color.locked))
   // A radius long enough to span the scale reaches every point from either end,
@@ -465,6 +461,12 @@ export function Scale() {
               const contrast = contrastReference ? getContrast(hex, contrastReference) : undefined
               const contrastScore = contrast ? getContrastScore(contrast) : undefined
               const isLocked = Boolean(scale.colors[i].locked)
+              // Drawn from the scale so the label reads on this swatch whatever
+              // is selected. A label that had to stay legible while also being
+              // painted in the reference color couldn't: on a failing swatch
+              // those are contradictory jobs, and illegibility is the failure
+              // being reported.
+              const labelInk = getLabelInk(scale.colors, scaleHexes, i)
               return (
                 <Box
                   key={i}
@@ -476,7 +478,7 @@ export function Scale() {
                     outline: 'none',
                     width: '100%',
                     height: '100%',
-                    color: contrastReference,
+                    color: labelInk,
                     backgroundColor: hex,
                     borderTopLeftRadius: i === 0 ? 2 : 0,
                     borderBottomLeftRadius: i === 0 ? 2 : 0,
@@ -630,20 +632,18 @@ export function Scale() {
                     flexDirection="column"
                     sx={{
                       gap: 1,
-                      lineHeight: 1,
-                      // Only failing labels risk being illegible against their
-                      // swatch, so only they get the readable halo.
-                      textShadow:
-                        contrastScore === 'Fail' ? `0 0 1px ${shadowColor}, 0 0 2px ${shadowColor}` : undefined
+                      lineHeight: 1
                     }}
                   >
                     <span style={{fontWeight: 'normal'}}>{contrast ? contrast.toFixed(2) : ''}</span>
                     <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                      {/* The mark previews the measured pairing: the disc is the
-                          ink color (like the label text) with the swatch color
-                          punched through. A failing mark would vanish into the
-                          disc (that low contrast is the failure), so it switches
-                          to the nearest scale color that reads on the disc. */}
+                      {/* The mark previews the measured pairing, and is the only
+                          part of the label that does: the disc is the reference
+                          color with the swatch color punched through, so it's
+                          what moves as you select down the scale. A failing mark
+                          would vanish into the disc (that low contrast is the
+                          failure), so it switches to the nearest scale color
+                          that reads on the disc. */}
                       <Box
                         sx={{
                           display: 'grid',
