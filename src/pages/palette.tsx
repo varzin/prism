@@ -18,23 +18,57 @@ import {useGlobalState} from '../global-state'
 import {channels, Scale} from '../types'
 import {colorToHex} from '../utils'
 
-// Which of a scale's channels are driven by a preset, as the channel initials.
+// Which of a scale's channels are driven by a curve, as the channel initials.
 // Absent entirely when none are: the row is a list of scales first, and a mark
 // that never goes away would stop being a mark.
+//
+// Each initial opens its own curve, so the badge answers "which channels are
+// curved" and "take me to that one" with the same marks. That makes it a row of
+// links rather than a label, which is why it is a sibling of the scale's link
+// and not inside it -- a link cannot hold links.
 function CurveBadge({scale}: {scale: Scale}) {
   const driven = channels.filter(channel => scale.curves?.[channel])
 
   if (driven.length === 0) return null
 
-  const initials = driven.map(channel => channel[0].toUpperCase()).join('')
-
   return (
-    <Box
-      aria-label={`Curves on ${driven.join(', ')}`}
-      sx={{display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, opacity: 0.6}}
-    >
-      <Spline size={14} />
-      <Text sx={{fontSize: 0, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em'}}>{initials}</Text>
+    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0}}>
+      <Box as="span" aria-hidden="true" sx={{display: 'flex', opacity: 0.6}}>
+        <Spline size={14} />
+      </Box>
+      <Box sx={{display: 'flex'}}>
+        {driven.map(channel => (
+          <Box
+            key={channel}
+            as={Link}
+            to={`scale/${scale.id}`}
+            state={{curve: channel}}
+            aria-label={`Edit ${scale.name} ${channel} curve`}
+            sx={{
+              display: 'grid',
+              placeItems: 'center',
+              // Wider than the letter so there is something to hit, but tight
+              // enough that the initials still read as one mark.
+              width: 16,
+              height: 18,
+              borderRadius: 2,
+              color: 'inherit',
+              textDecoration: 'none',
+              fontSize: 0,
+              lineHeight: 1,
+              opacity: 0.6,
+              '&:hover': {opacity: 1, backgroundColor: 'var(--color-background-secondary-hover)'},
+              '&:focus-visible': {
+                opacity: 1,
+                outline: '2px solid var(--color-accent-emphasis, #0969da)',
+                outlineOffset: '1px'
+              }
+            }}
+          >
+            {channel[0].toUpperCase()}
+          </Box>
+        ))}
+      </Box>
     </Box>
   )
 }
@@ -245,28 +279,44 @@ export function Palette() {
               doesn't claim the panel. */}
           <VStack spacing={8} onFocusCapture={() => setActivePanel('left')}>
             {Object.values(palette.scales).map(scale => (
-              <Link
+              <Box
                 key={scale.id}
-                id={`scale-link-${scale.id}`}
-                to={`scale/${scale.id}`}
-                style={{
-                  display: 'block',
-                  color: 'inherit',
-                  fontSize: 14,
-                  textDecoration: 'none',
-                  padding: 4,
+                sx={{
+                  p: '4px',
                   borderRadius: 6,
                   backgroundColor: scale.id === scaleId ? 'var(--color-background-secondary)' : 'transparent'
                 }}
               >
                 <VStack spacing={4}>
-                  <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                    <Box as="span" sx={{flexGrow: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                  <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minHeight: 18}}>
+                    <Box
+                      as={Link}
+                      id={`scale-link-${scale.id}`}
+                      to={`scale/${scale.id}`}
+                      sx={{
+                        flexGrow: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: 'inherit',
+                        fontSize: 14,
+                        textDecoration: 'none'
+                      }}
+                    >
                       {scale.name}
                     </Box>
                     <CurveBadge scale={scale} />
                   </Box>
+                  {/* The swatches open the scale too -- they are the biggest
+                      target in the row -- but as the same destination the name
+                      already offers, so they stay out of the tab order and out
+                      of the accessibility tree rather than saying it twice. */}
                   <Box
+                    as={Link}
+                    to={`scale/${scale.id}`}
+                    tabIndex={-1}
+                    aria-hidden="true"
                     sx={{
                       display: 'flex',
                       height: 24,
@@ -288,7 +338,7 @@ export function Palette() {
                     })}
                   </Box>
                 </VStack>
-              </Link>
+              </Box>
             ))}
           </VStack>
           <Button style={{marginTop: 16, width: '100%'}} onClick={() => send({type: 'CREATE_SCALE', paletteId})}>

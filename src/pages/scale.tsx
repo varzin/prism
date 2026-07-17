@@ -15,7 +15,7 @@ import {Box, Text} from '@primer/react'
 import {Tooltip} from '@primer/react/drafts'
 import {getContrast, getLuminance} from 'color2k'
 import React from 'react'
-import {useNavigate, useOutletContext, useParams} from 'react-router-dom'
+import {useLocation, useNavigate, useOutletContext, useParams} from 'react-router-dom'
 import {Button, ButtonGroup, icon16, IconButton} from '../components/button'
 import {Color} from '../components/color'
 import {ContrastToggle} from '../components/contrast-toggle'
@@ -29,12 +29,22 @@ import {VStack, ZStack} from '../components/stack'
 import {routePrefix} from '../constants'
 import {useGlobalState} from '../global-state'
 import {PaletteOutletContext} from './palette'
-import {Channel} from '../types'
+import {Channel, channels} from '../types'
 import {colorToHex, getColorName, getContrastScore, getNearestContrasting, getRange} from '../utils'
 
 // The left list is rendered by the parent <Palette>, so this view reaches its
 // links by id rather than by ref.
 const SCALE_LINK_ID_PREFIX = 'scale-link-'
+
+// The curve a navigation asked to open, put there by the initials in the left
+// list (see CurveBadge). Carried on the history entry rather than in the URL:
+// it is a one-off instruction to this view, not a piece of the address -- which
+// curve is selected changes with every click once you are here, and a query
+// param would have to either follow that around or go stale.
+function requestedCurve(location: {state: unknown}): Channel | null {
+  const curve = (location.state as {curve?: unknown} | null)?.curve
+  return typeof curve === 'string' && (channels as string[]).includes(curve) ? (curve as Channel) : null
+}
 
 // The scale whose link currently has focus, or null if focus is elsewhere.
 function focusedScaleId() {
@@ -46,6 +56,7 @@ function focusedScaleId() {
 export function Scale() {
   const {paletteId = '', scaleId = ''} = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedIndex, setIndex] = React.useState('0')
   const [activeSeam, setActiveSeam] = React.useState<number | null>(null)
   // Which swatch is under the pointer, so the lock button can reveal itself
@@ -88,6 +99,12 @@ export function Scale() {
   // group's own select — which blurs the point — doesn't unmount it mid-click.
   // Only taking hold of another curve moves it; null until one is touched.
   const [selectedCurveType, setSelectedCurveType] = React.useState<Channel | null>(null)
+  // A curve asked for by name from the left list, held until it is on screen to
+  // take hold of. See the two effects that fill and drain it.
+  const [pendingCurve, setPendingCurve] = React.useState<Channel | null>(null)
+  // Set while a curve request is the reason activeCurveType changed, so the
+  // effect watching it can tell that apart from a Tab and leave focus alone.
+  const claimedByRequest = React.useRef(false)
   const curveEditorRefs = React.useRef<Partial<Record<Channel, CurveEditorHandle | null>>>({})
   const nameInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -239,6 +256,11 @@ export function Scale() {
     // below, its onSelect will say so.
     setSelectedCurveType(null)
 
+    // Arriving by way of a curve initial means a particular curve was asked for,
+    // and the effect below puts focus on it. Leave focus alone here rather than
+    // move it twice.
+    if (requestedCurve(location)) return
+
     if (activePanel === 'left') {
       document.getElementById(`scale-link-${scaleId}`)?.focus()
     } else if (activePanel === 'center' && scale) {
@@ -248,9 +270,49 @@ export function Scale() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scaleId])
 
+  // An initial in the left list names one curve to open. Recorded rather than
+  // acted on at once: the curve may be hidden, and there is nothing to take hold
+  // of until it is back on screen. Keyed on the history entry, not on scaleId,
+  // so asking for another curve of the scale already open still counts.
+  React.useEffect(() => {
+    const requested = requestedCurve(location)
+    if (!requested) return
+
+    setVisibleCurves(current => (current[requested] ? current : {...current, [requested]: true}))
+    setPendingCurve(requested)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
+
+  // Taking the whole curve rather than a point on it: the request named a curve
+  // and nothing narrower, and a focused line is how this editor shows one curve
+  // held entire. It is also the only hold that always works -- a driven curve's
+  // middle points cannot move, so landing on one would leave the arrow keys
+  // doing nothing. Focusing is what tells the inspector to report on it, too.
+  React.useEffect(() => {
+    if (!pendingCurve || !visibleCurves[pendingCurve]) return
+
+    if (activeCurveType !== pendingCurve) {
+      // Only when this actually changes, or the effect that watches it never
+      // runs to lower the flag again. See claimedByRequest.
+      claimedByRequest.current = true
+      setActiveCurveType(pendingCurve)
+    }
+
+    curveEditorRefs.current[pendingCurve]?.focusLine()
+    setPendingCurve(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCurve, visibleCurves])
+
   // Tab/Shift+Tab in the center panel changes activeCurveType; keep the same
   // point index focused on the newly active curve.
   React.useEffect(() => {
+    // Unless a curve request set it, which has already put focus on the whole
+    // curve and does not want a point picked out of it instead.
+    if (claimedByRequest.current) {
+      claimedByRequest.current = false
+      return
+    }
+
     if (activePanel !== 'center' || !scale) return
     const clampedIndex = Math.min(Number(selectedIndex), scale.colors.length - 1)
     curveEditorRefs.current[activeCurveType]?.focusPoint(clampedIndex)
