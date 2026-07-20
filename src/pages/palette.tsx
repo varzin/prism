@@ -1,4 +1,4 @@
-import {Palette as PaletteIcon, Redo2, Spline, Undo2} from 'lucide-react'
+import {Palette as PaletteIcon, Redo2, Spline, Undo2, X} from 'lucide-react'
 import {Box, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
@@ -9,7 +9,6 @@ import {ContrastMode} from '../components/contrast-toggle'
 import {ExportScales} from '../components/export-scales'
 import {FormatSettings} from '../components/format-settings'
 import {ImportScales} from '../components/import-scales'
-import {Input} from '../components/input'
 import {Separator} from '../components/separator'
 import {SidebarPanel} from '../components/sidebar-panel'
 import {HStack, VStack} from '../components/stack'
@@ -210,26 +209,19 @@ export function Palette() {
           paddingBottom: 16
         }}
       >
-        <SidebarPanel title="Palette">
+        <SidebarPanel
+          title="Palette"
+          // Renaming and deleting a palette both live on the home screen, next
+          // to the card they act on. What is left here is the way back, and it
+          // belongs beside the title rather than below the panel's contents --
+          // it acts on the palette, not on the background color above it.
+          action={
+            <Button size="small" leadingVisual={icon16(X)} onClick={() => navigate(`${routePrefix}/`)}>
+              Close palette
+            </Button>
+          }
+        >
           <VStack spacing={16}>
-            <VStack spacing={4}>
-              <label htmlFor="palette-name" style={{fontSize: 14}}>
-                Name
-              </label>
-              <Input
-                type="text"
-                id="palette-name"
-                value={palette.name}
-                style={{width: '100%'}}
-                onChange={event =>
-                  send({
-                    type: 'CHANGE_PALETTE_NAME',
-                    paletteId,
-                    name: event.target.value
-                  })
-                }
-              />
-            </VStack>
             <HStack spacing={8}>
               <input
                 id="bg-color"
@@ -257,17 +249,6 @@ export function Palette() {
                 Background color
               </label>
             </HStack>
-            <Button
-              aria-label="Delete palette"
-              onClick={() => {
-                send({type: 'DELETE_PALETTE', paletteId})
-
-                // Navigate to home page after deleting a palette
-                navigate(`${routePrefix}/`)
-              }}
-            >
-              Delete palette
-            </Button>
           </VStack>
         </SidebarPanel>
         <Separator />

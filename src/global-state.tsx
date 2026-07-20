@@ -43,6 +43,11 @@ type MachineEvent =
   | {
       type: 'CREATE_PALETTE'
       paletteId: string
+      name?: string
+      // Scales to seed the palette with, as name -> hex(es) light->dark (the
+      // shape of example-scales.json and the template files). Omitted falls back
+      // to the built-in example scales; an empty object makes a blank palette.
+      scales?: Record<string, string[] | string>
     }
   | {
       type: 'DELETE_PALETTE'
@@ -166,7 +171,11 @@ const machine = Machine<MachineContext, MachineEvent>({
       // palette after dispatching (navigation lives in the component, not here).
       actions: assign((context, event) => {
         const paletteId = event.paletteId
-        const scales: Scale[] = Object.entries(exampleScales).map(([name, scale]) => {
+        // A defined-but-empty `scales` means the caller chose a blank palette,
+        // so it must win over the example fallback -- only an absent field falls
+        // back to the built-in examples.
+        const source = event.scales ?? exampleScales
+        const scales: Scale[] = Object.entries(source).map(([name, scale]) => {
           const id = uniqueId()
           const scaleArray = isArray(scale) ? scale : [scale]
           return {
@@ -177,7 +186,9 @@ const machine = Machine<MachineContext, MachineEvent>({
         })
         context.palettes[paletteId] = {
           id: paletteId,
-          name: 'Untitled',
+          // The name comes from the create dialog; an untouched field still has
+          // to produce a palette, so the placeholder it showed is the fallback.
+          name: event.name?.trim() || 'Untitled',
           backgroundColor: '#ffffff',
           scales: keyBy(scales, 'id')
         }
