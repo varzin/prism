@@ -8,9 +8,8 @@ import cssColorNames from './css-color-names.json'
 import exampleScales from './example-scales.json'
 import {applyCurve} from './easings'
 import {Channel, Color, Curve, Palette, Scale} from './types'
+import {loadPersistedState, persistState, requestPersistentStorage} from './storage'
 import {clamp, getColorName, getRange, hexToColor, predictColorName, randomIntegerInRange} from './utils'
-
-const GLOBAL_STATE_KEY = 'global_state'
 
 // Re-derives every driven channel from its endpoints. Called after anything
 // that touches a scale's colors, so a driven channel can never be left showing
@@ -394,11 +393,34 @@ const machine = Machine<MachineContext, MachineEvent>({
 type GlobalService = Interpreter<MachineContext, any, MachineEvent, any, TypegenDisabled>
 const GlobalStateContext = React.createContext<GlobalService>(interpret(machine) as unknown as GlobalService)
 
+// Loading the persisted state is now async (IndexedDB), so the provider holds
+// back until it resolves. `undefined` means "still hydrating" and renders
+// nothing; once we have a concrete state we mount the machine exactly once.
 export function GlobalStateProvider({children}: React.PropsWithChildren<{}>) {
-  const initialState = React.useMemo(() => getPersistedState() ?? machine.initialState, [])
+  const [initialState, setInitialState] = React.useState<typeof machine.initialState | undefined>(undefined)
 
+  React.useEffect(() => {
+    let active = true
+    void requestPersistentStorage()
+    getPersistedState().then(persisted => {
+      if (active) setInitialState(persisted ?? machine.initialState)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (initialState === undefined) return null
+
+  return <ReadyGlobalStateProvider initialState={initialState}>{children}</ReadyGlobalStateProvider>
+}
+
+function ReadyGlobalStateProvider({
+  initialState,
+  children
+}: React.PropsWithChildren<{initialState: typeof machine.initialState}>) {
   const service = useInterpret(machine, {state: initialState, devTools: true}, state => {
-    localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify(state))
+    persistState(JSON.stringify(state))
   })
 
   return <GlobalStateContext.Provider value={service}>{children}</GlobalStateContext.Provider>
@@ -448,9 +470,12 @@ function foldLegacyCurvesIntoColors(palettes: Record<string, LegacyPalette>) {
   }
 }
 
-function getPersistedState(): typeof machine.initialState | null {
+async function getPersistedState(): Promise<typeof machine.initialState | null> {
   try {
-    const state = JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY) ?? '')
+    const raw = await loadPersistedState()
+    if (raw == null) return null
+
+    const state = JSON.parse(raw)
     const {palettes, past = [], future = []} = state?.context ?? {}
 
     // The undo stacks hold whole palette snapshots, so they need folding too —

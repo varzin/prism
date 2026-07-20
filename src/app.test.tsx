@@ -4,7 +4,7 @@ import React from 'react'
 import {App} from './app'
 import {GlobalStateProvider} from './global-state'
 
-test('renders the home page without crashing', () => {
+test('renders the home page without crashing', async () => {
   render(
     <ThemeProvider colorMode="auto">
       <GlobalStateProvider>
@@ -13,6 +13,7 @@ test('renders the home page without crashing', () => {
     </ThemeProvider>
   )
 
-  // The header title is present on the home route (matched via the /prism basename).
-  expect(screen.getByRole('heading', {name: 'Nectary Prism', level: 1})).toBeInTheDocument()
+  // The provider hydrates its state asynchronously, so wait for the home route
+  // to mount. The header title is present there (matched via the /prism basename).
+  expect(await screen.findByRole('heading', {name: 'Nectary Prism', level: 1})).toBeInTheDocument()
 })
