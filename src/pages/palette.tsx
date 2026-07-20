@@ -223,6 +223,22 @@ export function Palette() {
           }
         >
           <VStack spacing={16}>
+            {/* The palette's name, shown for reference. Renaming lives on the
+                home screen next to the card, so this is read-only here. */}
+            <VStack spacing={4} style={{width: '100%'}}>
+              <span style={{fontSize: 12, opacity: 0.7}}>Name</span>
+              <span
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {palette.name}
+              </span>
+            </VStack>
             <HStack spacing={8}>
               <input
                 id="bg-color"

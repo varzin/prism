@@ -1,8 +1,9 @@
 import {Palette as PaletteIcon, Pencil, Plus, Trash2} from 'lucide-react'
 import {Box, Label} from '@primer/react'
+import {ConfirmationDialog} from '@primer/react/lib-esm/ConfirmationDialog/ConfirmationDialog'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
-import {Link, useNavigate} from 'react-router-dom'
+import {Link} from 'react-router-dom'
 import {v4 as uniqueId} from 'uuid'
 import {icon16, IconButton} from '../components/button'
 import {Input} from '../components/input'
@@ -68,15 +69,21 @@ function RenamePaletteForm({
 
 export function Index() {
   const [state, send] = useGlobalState()
-  const navigate = useNavigate()
   const [renamingId, setRenamingId] = React.useState<string | null>(null)
   const [isCreating, setIsCreating] = React.useState(false)
+  // The palette awaiting delete confirmation, or null when the dialog is closed.
+  // Deleting a palette takes all of its scales with it, so it goes through a
+  // confirm step rather than firing on the first click.
+  const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const deletingPalette = deletingId ? state.context.palettes[deletingId] : undefined
 
   function createPalette(name: string, scales: Record<string, string[] | string>) {
     const paletteId = uniqueId()
     send({type: 'CREATE_PALETTE', paletteId, name, scales})
     setIsCreating(false)
-    navigate(`${routePrefix}/local/${paletteId}`)
+    // Stay on the overview after creating -- the new palette shows up as a card
+    // here, and the user opens it when they're ready rather than being dropped
+    // straight into the editor.
   }
   return (
     <div>
@@ -247,9 +254,7 @@ export function Index() {
                         sx={{marginLeft: 'auto'}}
                         aria-label={`Delete ${palette.name}`}
                         icon={icon16(Trash2)}
-                        onClick={() => {
-                          send({type: 'DELETE_PALETTE', paletteId: palette.id})
-                        }}
+                        onClick={() => setDeletingId(palette.id)}
                       />
                     </>
                   )}
@@ -290,6 +295,22 @@ export function Index() {
         </Box>
       </Box>
       {isCreating ? <NewPaletteDialog onClose={() => setIsCreating(false)} onCreate={createPalette} /> : null}
+      {deletingPalette ? (
+        <ConfirmationDialog
+          title={`Delete ${deletingPalette.name}?`}
+          confirmButtonContent="Delete"
+          confirmButtonType="danger"
+          onClose={gesture => {
+            if (gesture === 'confirm') {
+              send({type: 'DELETE_PALETTE', paletteId: deletingPalette.id})
+            }
+
+            setDeletingId(null)
+          }}
+        >
+          This palette and all of its scales will be removed. You can bring it back with undo (⌘Z).
+        </ConfirmationDialog>
+      ) : null}
     </div>
   )
 }

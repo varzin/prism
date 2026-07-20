@@ -22,7 +22,15 @@ export function NewPaletteDialog({
       <form
         onSubmit={event => {
           event.preventDefault()
-          onCreate(name.trim(), getTemplateScales(templateId))
+          // An untouched name would fall back to "Untitled". When the palette is
+          // seeded from a named template, borrow that template's label instead --
+          // it's a better default than "Untitled". A name the user typed always
+          // wins, and "Start from scratch" has no label to borrow so it's left
+          // blank to fall back to "Untitled" as before.
+          const trimmedName = name.trim()
+          const template = templates.find(t => t.id === templateId)
+          const paletteName = trimmedName || (templateId === SCRATCH_TEMPLATE_ID ? '' : template?.label ?? '')
+          onCreate(paletteName, getTemplateScales(templateId))
         }}
       >
         <VStack spacing={16}>
