@@ -1,8 +1,11 @@
+import {parseToRgba} from 'color2k'
 import {v4 as uniqueId} from 'uuid'
-import {Color, Palette, Scale} from './types'
-import {colorToHex, getColorName, hexToColor} from './utils'
+import {Color, FormatPresetKey, Palette, PaletteFormat, Scale} from './types'
+import {clamp, colorToHex, getColorName, hexToColor} from './utils'
 
-// localStorage key for the user's custom import/export format template.
+// Legacy localStorage key: formats used to be a single global template here,
+// before they moved into each palette. Kept only so loadPersistedState can
+// migrate an existing value into palettes on first run.
 export const FORMAT_TEMPLATE_KEY = 'export_format_template'
 
 // The three placeholders a template may use, each exactly once.
@@ -24,6 +27,60 @@ export const DEFAULT_TEMPLATE = `"${PLACEHOLDER_SCALE_NAME}": {
     "description": "Based on the Brand Library"
   }
 }`
+
+// Pre-baked format presets. Edit the templates here to tweak what each preset
+// inserts — they all follow the same placeholder rules as a Custom template
+// (see compileTemplate). `custom` has no template: it uses the user's own draft.
+// A preset is either template-based (a string with placeholders) or code-backed
+// (`code: true` — serialized by dedicated functions rather than a template,
+// because its shape can't be produced by string substitution).
+export const FORMAT_PRESETS: {key: FormatPresetKey; label: string; template?: string; code?: boolean}[] = [
+  {key: 'custom', label: 'Custom'},
+  {
+    key: 'nectary',
+    // Nectary / Brand Library design-token shape: a bare list of scales.
+    label: 'Nectary',
+    template: `"${PLACEHOLDER_SCALE_NAME}": {
+  "${PLACEHOLDER_SCALE_STEP}": {
+    "value": "${PLACEHOLDER_SCALE_COLOR_VALUE}",
+    "type": "color",
+    "description": "Based on the Brand Library"
+  }
+}`
+  },
+  {
+    key: 'w3c',
+    // W3C Design Tokens (DTCG) — the shape Figma's Variables import/export reads
+    // and writes. Code-backed: each color becomes a { colorSpace, components,
+    // alpha, hex } object, so the RGB components are computed per color. Nested
+    // groups map to "/"-separated scale names, and Figma's own ids
+    // ($extensions) are dropped so the file stays portable.
+    label: 'W3C DTCG',
+    code: true
+  }
+]
+
+// Whether a preset is serialized by dedicated code rather than a template.
+export function isCodeBackedPreset(preset: FormatPresetKey): boolean {
+  return FORMAT_PRESETS.find(preset_ => preset_.key === preset)?.code === true
+}
+
+// Look up a preset's template. Returns undefined for `custom` (or unknown keys).
+export function presetTemplate(key: FormatPresetKey): string | undefined {
+  return FORMAT_PRESETS.find(preset => preset.key === key)?.template
+}
+
+// The format a palette falls back to when it has none saved yet.
+export const DEFAULT_PALETTE_FORMAT: PaletteFormat = {preset: 'custom', custom: DEFAULT_TEMPLATE}
+
+// The template a palette actually imports/exports with: the preset's baked shape,
+// or the user's Custom draft. Tolerates a missing format (older palettes).
+export function resolveTemplate(format: PaletteFormat | undefined): string {
+  if (!format || format.preset === 'custom') {
+    return format?.custom || DEFAULT_TEMPLATE
+  }
+  return presetTemplate(format.preset) || format.custom || DEFAULT_TEMPLATE
+}
 
 // Sentinels use private-use codepoints so they never collide with real content
 // yet stay valid inside a JSON string.
@@ -257,6 +314,158 @@ const SAMPLE_PALETTE: Palette = {
 // Render the export the current template would produce, against a fixed sample.
 export function previewTemplate(template: string): string {
   return serialize(SAMPLE_PALETTE, template)
+}
+
+// ---------------------------------------------------------------------------
+// W3C DTCG (Figma Variables) — a code-backed format. Colors become DTCG color
+// objects, and nested groups map to "/"-separated scale names. This can't be a
+// string template because each color's sRGB components are computed per color.
+// ---------------------------------------------------------------------------
+
+// Build a DTCG color value: sRGB components (0..1) plus a hex convenience field,
+// the shape Figma's Variables import reads.
+function colorToDtcgValue(hex: string): Json {
+  const [red, green, blue, alpha] = parseToRgba(hex)
+  return {
+    colorSpace: 'srgb',
+    components: [red / 255, green / 255, blue / 255],
+    alpha,
+    hex: hex.toUpperCase()
+  }
+}
+
+// Turn sRGB components (0..1) back into a hex string, for reading DTCG values
+// that omit the convenience `hex` field.
+function componentsToHex(red: number, green: number, blue: number): string {
+  const channel = (value: number) =>
+    Math.round(clamp(value, 0, 1) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${channel(red)}${channel(green)}${channel(blue)}`
+}
+
+// Read a color out of a DTCG leaf, tolerating both the rich object value and a
+// bare hex string. Returns null for non-color or unreadable tokens.
+function dtcgLeafToColor(leaf: {[key: string]: Json}): Color | null {
+  const type = leaf['$type']
+  if (typeof type === 'string' && type !== 'color') return null
+
+  const value = leaf['$value']
+  let hex: string | null = null
+  if (typeof value === 'string') {
+    hex = value
+  } else if (isPlainObject(value)) {
+    if (typeof value.hex === 'string') {
+      hex = value.hex
+    } else if (Array.isArray(value.components) && value.components.length >= 3) {
+      const [red, green, blue] = value.components
+      if (typeof red === 'number' && typeof green === 'number' && typeof blue === 'number') {
+        hex = componentsToHex(red, green, blue)
+      }
+    }
+  }
+  if (!hex) return null
+
+  try {
+    return hexToColor(hex)
+  } catch {
+    return null
+  }
+}
+
+// Serialize a palette to the DTCG shape Figma reads. A scale name is split on
+// "/" into nested groups, so "Background/Default" becomes Background → Default →
+// steps; shared prefixes across scales merge into one group tree.
+export function dtcgSerialize(palette: Palette): string {
+  const root: {[key: string]: Json} = {}
+
+  for (const scale of Object.values(palette.scales)) {
+    const groups = scale.name
+      .split('/')
+      .map(segment => segment.trim())
+      .filter(Boolean)
+
+    scale.colors.forEach((color, index) => {
+      const path = [...groups, getColorName(scale.colors, index)]
+      let node = root
+      for (let depth = 0; depth < path.length - 1; depth++) {
+        const key = path[depth]
+        if (!isPlainObject(node[key])) node[key] = {}
+        node = node[key] as {[key: string]: Json}
+      }
+      node[path[path.length - 1]] = {
+        $type: 'color',
+        $value: colorToDtcgValue(colorToHex(color))
+      }
+    })
+  }
+
+  return JSON.stringify(root, null, 2)
+}
+
+// Parse a DTCG token file into scales. Walks nested groups to every color leaf;
+// the leaf's path becomes scaleName ("/"-joined groups) + step (last segment).
+// Figma's own ids and other metadata ($-prefixed keys) are ignored.
+export function dtcgDeserialize(jsonText: string): Scale[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(jsonText)
+  } catch {
+    throw new Error("The file isn't valid JSON.")
+  }
+  if (!isPlainObject(parsed)) {
+    throw new Error('Expected a DTCG token object at the top level.')
+  }
+
+  const order: string[] = []
+  const byScale = new Map<string, Color[]>()
+
+  function visit(node: {[key: string]: Json}, path: string[]) {
+    if ('$value' in node) {
+      const color = dtcgLeafToColor(node)
+      if (!color) return
+      const stepName = path[path.length - 1] ?? 'value'
+      const scaleName = path.length > 1 ? path.slice(0, -1).join('/') : stepName
+      if (!byScale.has(scaleName)) {
+        byScale.set(scaleName, [])
+        order.push(scaleName)
+      }
+      byScale.get(scaleName)!.push({...color, name: stepName})
+      return
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key.startsWith('$')) continue
+      if (isPlainObject(child)) visit(child, [...path, key])
+    }
+  }
+  visit(parsed, [])
+
+  const scales = order.map(name => ({id: uniqueId(), name, colors: byScale.get(name)!}))
+  if (scales.length === 0) {
+    throw new Error('No color tokens found.')
+  }
+  return scales
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch: pick the template engine or a code-backed preset from the format.
+// ---------------------------------------------------------------------------
+
+export function serializePalette(palette: Palette, format: PaletteFormat | undefined): string {
+  if (format && isCodeBackedPreset(format.preset)) return dtcgSerialize(palette)
+  return serialize(palette, resolveTemplate(format))
+}
+
+export function deserializePalette(text: string, format: PaletteFormat | undefined): Scale[] {
+  if (format && isCodeBackedPreset(format.preset)) return dtcgDeserialize(text)
+  return deserialize(text, resolveTemplate(format))
+}
+
+// A live sample of what a format produces, for the settings preview and the
+// import placeholder.
+export function previewFormat(format: PaletteFormat | undefined): string {
+  if (format && isCodeBackedPreset(format.preset)) return dtcgSerialize(SAMPLE_PALETTE)
+  return serialize(SAMPLE_PALETTE, resolveTemplate(format))
 }
 
 // Turn a palette name into a safe `.json` filename.

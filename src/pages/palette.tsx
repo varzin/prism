@@ -196,8 +196,11 @@ export function Palette() {
               })
             }
           /> */}
-          <FormatSettings />
-          <ImportScales onImport={(scales, replace) => send({type: 'IMPORT_SCALES', paletteId, scales, replace})} />
+          <FormatSettings palette={palette} />
+          <ImportScales
+            format={palette.format}
+            onImport={(scales, replace) => send({type: 'IMPORT_SCALES', paletteId, scales, replace})}
+          />
           <ExportScales palette={palette} />
         </HStack>
       </header>

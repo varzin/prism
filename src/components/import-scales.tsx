@@ -3,18 +3,18 @@ import {Dialog} from '@primer/react/lib-esm/Dialog/Dialog'
 import {keyBy} from 'lodash-es'
 import {Upload} from 'lucide-react'
 import React from 'react'
-import {useFormatTemplate} from '../format-context'
-import {deserialize} from '../format'
-import {Scale} from '../types'
+import {deserializePalette, previewFormat} from '../format'
+import {PaletteFormat, Scale} from '../types'
 import {Button} from './button'
 import {HStack, VStack} from './stack'
 
 type ImportScalesProps = {
+  // The palette's import/export format (a preset or its Custom template).
+  format: PaletteFormat | undefined
   onImport: (scales: Record<string, Scale>, replace: boolean) => void
 }
 
-export function ImportScales({onImport}: ImportScalesProps) {
-  const [template] = useFormatTemplate()
+export function ImportScales({format, onImport}: ImportScalesProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [code, setCode] = React.useState('')
   const [error, setError] = React.useState('')
@@ -37,7 +37,7 @@ export function ImportScales({onImport}: ImportScalesProps) {
     event.preventDefault()
 
     try {
-      const scales = deserialize(code, template)
+      const scales = deserializePalette(code, format)
       onImport(keyBy(scales, 'id'), replace)
 
       // Reset state
@@ -93,7 +93,7 @@ export function ImportScales({onImport}: ImportScalesProps) {
                   id="code"
                   rows={12}
                   sx={{fontFamily: 'mono', width: '100%'}}
-                  placeholder={template}
+                  placeholder={previewFormat(format)}
                   value={code}
                   onChange={event => setCode(event.target.value)}
                   onDragOver={event => event.preventDefault()}

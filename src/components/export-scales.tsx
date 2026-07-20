@@ -5,8 +5,7 @@ import copy from 'copy-to-clipboard'
 import {camelCase} from 'lodash-es'
 import {Download} from 'lucide-react'
 import React from 'react'
-import {useFormatTemplate} from '../format-context'
-import {serialize, slugifyFilename} from '../format'
+import {serializePalette, slugifyFilename} from '../format'
 import {Palette} from '../types'
 import {colorToHex, getColorName} from '../utils'
 import {Button} from './button'
@@ -20,17 +19,16 @@ type ExportScalesProps = {
 type NamedColor = {name: string; value: string}
 
 export function ExportScales({palette}: ExportScalesProps) {
-  const [template] = useFormatTemplate()
   const [isOpen, setIsOpen] = React.useState(false)
 
-  // JSON export follows the user's custom format template.
+  // JSON export follows this palette's format (a preset or its Custom template).
   const code = React.useMemo(() => {
     try {
-      return serialize(palette, template)
+      return serializePalette(palette, palette.format)
     } catch (error) {
       return error instanceof Error ? error.message : String(error)
     }
-  }, [palette, template])
+  }, [palette])
 
   // The SVG swatch sheet is independent of the JSON format template.
   const namedScales = React.useMemo(

@@ -2,9 +2,18 @@ import {Box, Button as PrimerButton, Flash, Text, Textarea} from '@primer/react'
 import {Dialog} from '@primer/react/lib-esm/Dialog/Dialog'
 import {Settings} from 'lucide-react'
 import React from 'react'
-import {useFormatTemplate} from '../format-context'
-import {DEFAULT_TEMPLATE, PLACEHOLDERS, previewTemplate} from '../format'
+import {
+  DEFAULT_PALETTE_FORMAT,
+  FORMAT_PRESETS,
+  isCodeBackedPreset,
+  PLACEHOLDERS,
+  presetTemplate,
+  previewFormat
+} from '../format'
+import {useGlobalState} from '../global-state'
+import {FormatPresetKey, Palette} from '../types'
 import {icon16, IconButton} from './button'
+import {Select} from './select'
 import {VStack} from './stack'
 
 const TABS = [
@@ -52,45 +61,78 @@ const KEYBINDING_GROUPS: {title: string; bindings: {keys: string; description: s
   }
 ]
 
-export function FormatSettings() {
-  const [template, setTemplate] = useFormatTemplate()
+export function FormatSettings({palette}: {palette: Palette}) {
+  const [, send] = useGlobalState()
   const [isOpen, setIsOpen] = React.useState(false)
   const [tab, setTab] = React.useState<'format' | 'keybindings'>('format')
-  const [draft, setDraft] = React.useState(template)
+  // `preset` is which format is picked; `customDraft` is the hand-edited Custom
+  // template, kept separately so flipping to a preset and back restores it.
+  const [preset, setPreset] = React.useState<FormatPresetKey>('custom')
+  const [customDraft, setCustomDraft] = React.useState(DEFAULT_PALETTE_FORMAT.custom)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+  const isCustom = preset === 'custom'
+  const isCodeBacked = isCodeBackedPreset(preset)
 
   const {preview, error} = React.useMemo(() => {
     try {
-      return {preview: previewTemplate(draft), error: ''}
+      return {preview: previewFormat({preset, custom: customDraft}), error: ''}
     } catch (error) {
       return {preview: '', error: error instanceof Error ? error.message : String(error)}
     }
-  }, [draft])
+  }, [preset, customDraft])
+
+  // What the textarea shows: the editable Custom draft, a preset's baked
+  // template, or — for a code-backed preset like W3C DTCG — the generated sample
+  // (read-only, since it has no editable template).
+  const shownTemplate = isCustom ? customDraft : isCodeBacked ? preview : presetTemplate(preset) ?? customDraft
 
   function open() {
-    setDraft(template)
+    const format = palette.format ?? DEFAULT_PALETTE_FORMAT
+    setPreset(format.preset)
+    setCustomDraft(format.custom || DEFAULT_PALETTE_FORMAT.custom)
     setTab('format')
     setIsOpen(true)
   }
 
   function save() {
-    setTemplate(draft)
+    send({type: 'CHANGE_PALETTE_FORMAT', paletteId: palette.id, format: {preset, custom: customDraft}})
     setIsOpen(false)
   }
 
   // Insert a placeholder at the caret, keeping focus and caret position sensible.
+  // Only reachable in Custom mode, so it always edits the Custom draft.
   function insertToken(token: string) {
     const el = textareaRef.current
-    const start = el?.selectionStart ?? draft.length
-    const end = el?.selectionEnd ?? draft.length
-    const next = draft.slice(0, start) + token + draft.slice(end)
-    setDraft(next)
+    const start = el?.selectionStart ?? customDraft.length
+    const end = el?.selectionEnd ?? customDraft.length
+    const next = customDraft.slice(0, start) + token + customDraft.slice(end)
+    setCustomDraft(next)
     requestAnimationFrame(() => {
       el?.focus()
       const caret = start + token.length
       el?.setSelectionRange(caret, caret)
     })
   }
+
+  // Sticky footer, pinned to the bottom of the Dialog. Only the format tab has
+  // actions, but `renderFooter` must stay defined across renders: if it flips to
+  // `undefined`, Primer swaps in its internal DefaultFooter, whose `useFocusZone`
+  // hooks run inline in the Dialog and change its hook count → "Rendered more
+  // hooks than during the previous render". So the keybindings tab renders an
+  // empty footer rather than none.
+  const renderFooter = () => (
+    <Dialog.Footer>
+      {tab === 'format' ? (
+        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, width: '100%'}}>
+          <PrimerButton onClick={() => setIsOpen(false)}>Cancel</PrimerButton>
+          <PrimerButton variant="primary" onClick={save} disabled={Boolean(error)}>
+            Save
+          </PrimerButton>
+        </div>
+      ) : null}
+    </Dialog.Footer>
+  )
 
   return (
     <>
@@ -103,6 +145,7 @@ export function FormatSettings() {
           }
           width="xlarge"
           onClose={() => setIsOpen(false)}
+          renderFooter={renderFooter}
         >
           <VStack spacing={16}>
             <Box
@@ -144,32 +187,67 @@ export function FormatSettings() {
             {tab === 'format' ? (
               <>
                 <VStack spacing={8} style={{width: '100%'}}>
-                  <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, width: '100%'}}>
-                    {PLACEHOLDERS.map(({token, description}) => (
-                      <PrimerButton
-                        key={token}
-                        size="small"
-                        onClick={() => insertToken(token)}
-                        title={`Insert ${token}`}
-                      >
-                        <Text sx={{fontFamily: 'mono', fontSize: 0}}>{token}</Text>
-                        <Text sx={{color: 'fg.muted', fontSize: 0, ml: 2}}>{description}</Text>
-                      </PrimerButton>
-                    ))}
-                  </div>
+                  <Text sx={{fontSize: 1, color: 'fg.muted', width: '100%'}}>
+                    This format defines the JSON shape used when you import and export this palette's scales. Pick a
+                    ready-made preset, or choose Custom to design the shape yourself using the tokens below the field.
+                  </Text>
 
-                  <label htmlFor="format-template" style={{fontSize: 14, width: '100%'}}>
+                  <label htmlFor="format-preset" style={{fontSize: 14, width: '100%'}}>
                     Format
                   </label>
+                  <Select
+                    id="format-preset"
+                    value={preset}
+                    onChange={event => setPreset(event.target.value as FormatPresetKey)}
+                    style={{width: '100%'}}
+                  >
+                    {FORMAT_PRESETS.map(({key, label}) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+
                   <Textarea
                     id="format-template"
                     ref={textareaRef}
                     rows={12}
-                    value={draft}
-                    onChange={event => setDraft(event.target.value)}
-                    resize="vertical"
-                    sx={{fontFamily: 'mono', width: '100%'}}
+                    value={shownTemplate}
+                    onChange={event => setCustomDraft(event.target.value)}
+                    readOnly={!isCustom}
+                    resize={isCustom ? 'vertical' : 'none'}
+                    sx={{
+                      fontFamily: 'mono',
+                      width: '100%',
+                      // A read-only preset preview isn't editable, so give it
+                      // Primer's native disabled look (matching the wrapper's
+                      // own `disabled` styling) while staying selectable/copyable.
+                      ...(isCustom
+                        ? {}
+                        : {
+                            color: 'primer.fg.disabled',
+                            bg: 'input.disabledBg',
+                            cursor: 'not-allowed',
+                            '& textarea': {cursor: 'not-allowed'}
+                          })
+                    }}
                   />
+
+                  {isCustom ? (
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, width: '100%'}}>
+                      {PLACEHOLDERS.map(({token, description}) => (
+                        <PrimerButton
+                          key={token}
+                          size="small"
+                          onClick={() => insertToken(token)}
+                          title={`Insert ${token}`}
+                        >
+                          <Text sx={{fontFamily: 'mono', fontSize: 0}}>{token}</Text>
+                          <Text sx={{color: 'fg.muted', fontSize: 0, ml: 2}}>{description}</Text>
+                        </PrimerButton>
+                      ))}
+                    </div>
+                  ) : null}
                 </VStack>
 
                 {error ? <Flash variant="danger">{error}</Flash> : null}
@@ -193,13 +271,6 @@ export function FormatSettings() {
                     {error ? 'Fix the format to see a preview.' : preview}
                   </pre>
                 </VStack>
-
-                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, width: '100%'}}>
-                  <PrimerButton onClick={() => setDraft(DEFAULT_TEMPLATE)}>Reset to default</PrimerButton>
-                  <PrimerButton variant="primary" onClick={save} disabled={Boolean(error)}>
-                    Save
-                  </PrimerButton>
-                </div>
               </>
             ) : (
               <VStack spacing={16} style={{width: '100%'}}>

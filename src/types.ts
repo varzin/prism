@@ -55,9 +55,24 @@ export type Scale = {
   curves?: Partial<Record<Channel, Curve>>
 }
 
+// Which import/export format a palette uses: one of the pre-baked presets, or
+// `custom` — the user's own template, edited by hand.
+export type FormatPresetKey = 'custom' | 'nectary' | 'w3c'
+
+export type PaletteFormat = {
+  preset: FormatPresetKey
+  // The Custom draft, kept alongside the preset so switching to a preset and
+  // back to Custom restores exactly what the user last typed. Also the template
+  // actually used whenever `preset === 'custom'`.
+  custom: string
+}
+
 export type Palette = {
   id: string
   name: string
   backgroundColor: string
   scales: Record<string, Scale>
+  // The import/export format for this palette. Absent on palettes created before
+  // formats became per-palette; treated as a Custom default (see resolveTemplate).
+  format?: PaletteFormat
 }

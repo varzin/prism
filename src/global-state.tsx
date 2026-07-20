@@ -7,7 +7,8 @@ import {interpret, Interpreter, Machine, TypegenDisabled} from 'xstate'
 import cssColorNames from './css-color-names.json'
 import exampleScales from './example-scales.json'
 import {applyCurve} from './easings'
-import {Channel, Color, Curve, Palette, Scale} from './types'
+import {DEFAULT_PALETTE_FORMAT, FORMAT_TEMPLATE_KEY} from './format'
+import {Channel, Color, Curve, Palette, PaletteFormat, Scale} from './types'
 import {loadPersistedState, persistState, requestPersistentStorage} from './storage'
 import {clamp, getColorName, getRange, hexToColor, predictColorName, randomIntegerInRange} from './utils'
 
@@ -67,6 +68,11 @@ type MachineEvent =
       type: 'CHANGE_PALETTE_BACKGROUND_COLOR'
       paletteId: string
       backgroundColor: string
+    }
+  | {
+      type: 'CHANGE_PALETTE_FORMAT'
+      paletteId: string
+      format: PaletteFormat
     }
   | {
       type: 'CREATE_SCALE'
@@ -189,7 +195,8 @@ const machine = Machine<MachineContext, MachineEvent>({
           // to produce a palette, so the placeholder it showed is the fallback.
           name: event.name?.trim() || 'Untitled',
           backgroundColor: '#ffffff',
-          scales: keyBy(scales, 'id')
+          scales: keyBy(scales, 'id'),
+          format: DEFAULT_PALETTE_FORMAT
         }
       })
     },
@@ -209,6 +216,12 @@ const machine = Machine<MachineContext, MachineEvent>({
       target: 'debouncing',
       actions: assign((context, event) => {
         context.palettes[event.paletteId].backgroundColor = event.backgroundColor
+      })
+    },
+    CHANGE_PALETTE_FORMAT: {
+      target: 'debouncing',
+      actions: assign((context, event) => {
+        context.palettes[event.paletteId].format = event.format
       })
     },
     IMPORT_SCALES: {
@@ -470,6 +483,42 @@ function foldLegacyCurvesIntoColors(palettes: Record<string, LegacyPalette>) {
   }
 }
 
+// Formats used to be one global template in localStorage. Now each palette owns
+// its own, so on first run we seed that saved template as the Custom draft of
+// every palette that has no format yet, then drop the old key. One-time; deletable
+// once no one's storage predates per-palette formats.
+// The old lightweight "figma" preset was folded into the code-backed W3C DTCG
+// format (which is what Figma actually imports). Remap any palette still on it.
+function migrateRemovedPresets(palettes: Record<string, Palette>) {
+  for (const palette of Object.values(palettes)) {
+    if ((palette.format?.preset as string) === 'figma') {
+      palette.format!.preset = 'w3c'
+    }
+  }
+}
+
+function migrateLegacyFormat(palettes: Record<string, Palette> | undefined) {
+  if (!palettes) return
+
+  let legacy: string | null = null
+  try {
+    legacy = localStorage.getItem(FORMAT_TEMPLATE_KEY)
+  } catch {
+    return
+  }
+  if (legacy == null) return
+
+  for (const palette of Object.values(palettes)) {
+    if (!palette.format) palette.format = {preset: 'custom', custom: legacy}
+  }
+
+  try {
+    localStorage.removeItem(FORMAT_TEMPLATE_KEY)
+  } catch {
+    // ignore — worst case we migrate again next load, which is idempotent
+  }
+}
+
 async function getPersistedState(): Promise<typeof machine.initialState | null> {
   try {
     const raw = await loadPersistedState()
@@ -481,8 +530,13 @@ async function getPersistedState(): Promise<typeof machine.initialState | null> 
     // The undo stacks hold whole palette snapshots, so they need folding too —
     // otherwise stepping back lands on a palette the app can no longer read.
     for (const snapshot of [palettes, ...past, ...future]) {
-      if (snapshot) foldLegacyCurvesIntoColors(snapshot)
+      if (snapshot) {
+        foldLegacyCurvesIntoColors(snapshot)
+        migrateRemovedPresets(snapshot)
+      }
     }
+
+    migrateLegacyFormat(palettes)
 
     return state
   } catch (e) {
