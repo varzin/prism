@@ -1,5 +1,5 @@
 import {Palette as PaletteIcon, Pencil, Plus, Trash2} from 'lucide-react'
-import {Box, Button, Heading, Label, Text} from '@primer/react'
+import {Box, Label} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
 import {Link, useNavigate} from 'react-router-dom'
@@ -289,37 +289,6 @@ export function Index() {
           </Box>
         </Box>
       </Box>
-      {/* Empty state */}
-      {Object.keys(state.context.palettes).length === 0 ? (
-        <Box
-          sx={{
-            height: '70vh',
-            display: 'grid',
-            placeItems: 'center'
-          }}
-        >
-          <Box
-            sx={{
-              p: 3,
-              display: 'flex',
-              alignItems: 'center',
-              flexDirection: 'column',
-              textAlign: 'center',
-              maxWidth: '50ch'
-            }}
-          >
-            <Heading as="h2" sx={{marginBottom: 1}}>
-              Welcome
-            </Heading>
-            <Text sx={{marginBottom: 5, fontSize: 3, color: 'fg.muted'}}>
-              Nectary Prism is a tool for creating cohesive, consistent, and accessible color palettes
-            </Text>
-            <Button variant="primary" size="large" onClick={() => setIsCreating(true)}>
-              Create new palette
-            </Button>
-          </Box>
-        </Box>
-      ) : null}
       {isCreating ? <NewPaletteDialog onClose={() => setIsCreating(false)} onCreate={createPalette} /> : null}
     </div>
   )
