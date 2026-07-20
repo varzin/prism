@@ -1,5 +1,5 @@
 import {Palette as PaletteIcon, Redo2, Spline, Undo2, X} from 'lucide-react'
-import {Box, Text} from '@primer/react'
+import {Box, Label, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
 import {Link, Outlet, useNavigate, useParams} from 'react-router-dom'
@@ -157,6 +157,7 @@ export function Palette() {
             <Text as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
               Nectary Prism
             </Text>
+            <Label variant="accent">Beta</Label>
           </Text>
         </Link>
 

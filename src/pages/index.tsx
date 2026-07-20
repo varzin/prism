@@ -1,5 +1,5 @@
 import {Palette as PaletteIcon, Pencil, Plus, Trash2} from 'lucide-react'
-import {Box, Button, Heading, Text} from '@primer/react'
+import {Box, Button, Heading, Label, Text} from '@primer/react'
 import {mix, readableColor} from 'color2k'
 import React from 'react'
 import {Link, useNavigate} from 'react-router-dom'
@@ -93,6 +93,7 @@ export function Index() {
           <Box as="h1" sx={{m: 0, mx: 2, fontSize: 3, fontWeight: 'bold'}}>
             Nectary Prism
           </Box>
+          <Label variant="accent">Beta</Label>
         </Box>
       </Box>
       <Box sx={{p: 3}}>
